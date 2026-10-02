@@ -1001,3 +1001,21 @@ KHÔNG phải trang Leads — lead chỉ để sales theo phễu.
   bên cổng yêu cầu đó vẫn nằm ở "chờ báo giá" — đóng bằng cách trả lời đối tác.
 - Chuông `lead_yeu_cau_doi_tac` trỏ `/bao-gia?tab=yeu-cau` (nhánh này phải đứng TRƯỚC nhánh
   chung `loai.startsWith("lead_")` trong `targetUrl`, và có bản sao trong edge fn `send-push`).
+
+### Giấy tờ đại lý tải từ cổng: 分房表 + 合約 (02/10/2026)
+Danh sách đoàn bên cổng hiện 3 mốc: 飯店確認單 (KS đã `ks_xac_nhan_final` → push-portal đẩy
+sang), 分房表 (`chia_phong`), 合約 (`hop_dong`). Hai loại sau do **đại lý tự tải**:
+```
+cổng (bucket yeu-cau) → edge fn gui-giay-to (cổng, verify_jwt)
+  → edge fn giay-to-doi-tac (CRM, x-portal-secret = PORTAL_TRAO_DOI_SECRET)
+  → doan_tai_lieu loai='chia_phong'|'hop_dong' (1 file/loại/đoàn, gửi lại = THAY dòng cũ)
+    + chuông `giay_to_doi_tac` cho OP phụ trách (mở thẳng `/doan/:id?tab=tai-lieu`)
+```
+- Đại lý CHỈ tải được 2 loại này (`LOAI_DOI_TAC_TAI` ở `_shared/giay-to-doi-tac.ts`).
+  Hợp đồng OP đã tải cũng bị thay bằng bản đại lý gửi sau — bản mới nhất là bản đúng.
+- `chia_phong` + `hop_dong` PHẢI nằm trong `LOAI_MAC_DINH_CHIA_SE` (`_shared/portal-tai-lieu.ts`):
+  thiếu thì push-portal gỡ bản sao bên cổng ở lượt sau và trạng thái tắt theo.
+- OP cũng tải được ở tab Tài liệu khi đại lý gửi qua mail/LINE.
+- Thứ tự deploy: migration `20261002_doan_tai_lieu_chia_phong` → `giay-to-doi-tac` +
+  `push-portal` + `send-push` → bên cổng `gui-giay-to` (+ secret `CRM_GIAY_TO_URL`)
+  → frontend hai bên.

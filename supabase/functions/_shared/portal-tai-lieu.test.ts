@@ -24,6 +24,9 @@ describe("chiaSeVoiDoiTac", () => {
     expect(chiaSeVoiDoiTac({ loai: "hop_dong", portal_enabled: null })).toBe(true);
     expect(chiaSeVoiDoiTac({ loai: "danh_sach_khach", portal_enabled: null })).toBe(true);
   });
+  it("chia phòng mặc định đi — đại lý tự tải lên từ cổng, lượt đồng bộ không được gỡ", () => {
+    expect(chiaSeVoiDoiTac({ loai: "chia_phong", portal_enabled: null })).toBe(true);
+  });
   it("ngăn 'tài liệu khác' mặc định KHÔNG chia sẻ — hay bị dùng làm chỗ để đồ nội bộ", () => {
     expect(chiaSeVoiDoiTac({ loai: "khac", portal_enabled: null })).toBe(false);
   });

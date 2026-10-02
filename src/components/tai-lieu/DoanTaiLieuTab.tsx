@@ -26,10 +26,14 @@ import { useAuth } from "@/hooks/use-auth";
 import { chiaSeVoiDoiTac } from "../../../supabase/functions/_shared/portal-tai-lieu";
 import { t, useTranslate } from "@/lib/i18n";
 
-// Hợp đồng + Danh sách khách: 1 file/đoàn (replace). Báo giá: nhiều file (xem MultiFileSection).
-const SINGLE_SECTIONS: { loai: "hop_dong" | "danh_sach_khach"; desc: string; accent: string }[] = [
-  { loai: "hop_dong",        desc: "Hợp đồng đã ký giữa S8 và khách", accent: "bg-emerald-50 border-emerald-200" },
+// Hợp đồng + Danh sách khách + Chia phòng: 1 file/đoàn (replace). Báo giá: nhiều file (xem MultiFileSection).
+type LoaiMotFile = "hop_dong" | "danh_sach_khach" | "chia_phong";
+const SINGLE_SECTIONS: { loai: LoaiMotFile; desc: string; accent: string }[] = [
+  // Hợp đồng + Chia phòng: đại lý tải trên cổng thì file tự về đây (kèm chuông cho
+  // OP phụ trách); bản tải sau cùng — của OP hay đại lý — thay bản trước.
+  { loai: "hop_dong",        desc: "Hợp đồng đã ký giữa S8 và khách — đại lý tải trên cổng đối tác, hoặc OP tải lên", accent: "bg-emerald-50 border-emerald-200" },
   { loai: "danh_sach_khach", desc: "Danh sách khách đoàn",             accent: "bg-amber-50 border-amber-200" },
+  { loai: "chia_phong",      desc: "Chia phòng (分房表) — đại lý tải trên cổng đối tác, hoặc OP tải lên", accent: "bg-violet-50 border-violet-200" },
 ];
 
 interface Props {
@@ -175,6 +179,11 @@ function FileLine({ doc, doanId }: { doc: DoanTaiLieuRow; doanId: number }) {
         <p className="text-[10px] text-muted-foreground mt-0.5">
           {t("Upload")} {format(new Date(doc.uploaded_at), "dd/MM/yyyy HH:mm", { locale: vi })}
         </p>
+        {/* Hợp đồng / chia phòng đại lý gửi từ cổng: nói rõ ai gửi — file đó có thể vừa
+            thay bản OP đã tải, và không phải lúc nào chuông cũng tới đúng người. */}
+        {doc.loai !== "khac" && doc.mo_ta && (
+          <p className="text-[10px] text-violet-700 mt-0.5">{doc.mo_ta}</p>
+        )}
         <ChiaSeDoiTac doc={doc} doanId={doanId} />
       </div>
       {confirmDelete ? (
@@ -290,7 +299,7 @@ function DocSection({
   doanId, loai, existing, desc, accent, uploadedBy,
 }: {
   doanId: number;
-  loai: "hop_dong" | "danh_sach_khach";
+  loai: LoaiMotFile;
   existing: DoanTaiLieuRow | null;
   desc: string;
   accent: string;

@@ -23,8 +23,13 @@ export interface TaiLieuDaCo {
   tai_len_luc: string | null;
 }
 
-/** Loại tài liệu mặc định cho đối tác xem. */
-export const LOAI_MAC_DINH_CHIA_SE = ["hop_dong", "danh_sach_khach"];
+/**
+ * Loại tài liệu mặc định cho đối tác xem.
+ * 'chia_phong' (分房表) phải nằm đây: đại lý tự tải lên từ cổng, nên bản sao bên cổng
+ * PHẢI được giữ — không có trong danh sách này thì lượt đồng bộ sau gỡ mất file đại lý
+ * vừa gửi, và trạng thái "đã chia phòng" trên cổng tắt theo.
+ */
+export const LOAI_MAC_DINH_CHIA_SE = ["hop_dong", "danh_sach_khach", "chia_phong"];
 
 /**
  * File này có được đưa lên cổng không.

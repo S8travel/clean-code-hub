@@ -8,9 +8,10 @@
  */
 
 /** Tab của DoanDetail mà một vướng mắc dẫn tới. Whitelist cho deep-link `?tab=`. */
-export type DoanTab = "booking-ks" | "menu" | "booking-dv" | "chi-phi";
+export type DoanTab = "booking-ks" | "menu" | "booking-dv" | "chi-phi" | "tai-lieu";
 
-export const DOAN_TAB_HOP_LE: readonly DoanTab[] = ["booking-ks", "menu", "booking-dv", "chi-phi"];
+// "tai-lieu": chuông "đối tác gửi giấy tờ" (loai giay_to_doi_tac) mở thẳng tab Tài liệu.
+export const DOAN_TAB_HOP_LE: readonly DoanTab[] = ["booking-ks", "menu", "booking-dv", "chi-phi", "tai-lieu"];
 
 /** Chỉ nhận tab nằm trong whitelist — chặn `?tab=<rác>` làm Tabs rỗng ruột. */
 export function parseDoanTab(raw: string | null | undefined): DoanTab | null {

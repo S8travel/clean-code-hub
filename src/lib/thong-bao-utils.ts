@@ -83,6 +83,8 @@ export function targetUrl(tb: ThongBaoRow): string | null {
   if (loai === "nhac_viec_da_giao")           return `/my-job?viec=da-giao`;
   if (loai === "dntt_can_duyet")              return `/de-nghi-thanh-toan`;
   if (loai === "su_co" && doan_id)            return `/doan/${doan_id}?tab=log`;
+  // Đại lý tải 分房表 / 合約 trên cổng (edge fn giay-to-doi-tac): mở thẳng tab Tài liệu.
+  if (loai === "giay_to_doi_tac" && doan_id) return `/doan/${doan_id}?tab=tai-lieu`;
   // Đối tác yêu cầu sửa chương trình: mở thẳng báo giá đó để xem yêu cầu rồi
   // chào bản mới.
   if (loai === "bao_gia_yeu_cau_sua" && bao_gia_id) return `/bao-gia/${bao_gia_id}`;
