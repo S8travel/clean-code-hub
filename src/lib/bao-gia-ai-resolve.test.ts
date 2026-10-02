@@ -156,6 +156,31 @@ describe("resolveAiItems — ghép AI với master", () => {
     expect(toiCuoiTuan.match_set_menu_id).toBe(24);
   });
 
+  it("luật tự chọn set ghi kèm lý do để hiện chú thích dưới dòng", () => {
+    const [trua] = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: "trua", match: { table: "nha_hang", id: 4, set_menu_id: null, confidence: 0.8 } }),
+    ]), maps, "2026-09-02"); // thứ Tư
+    expect(trua.set_tu_chon).toEqual({
+      id: 21, ten: "SET BF TRƯA ( T2 - T6)", gia: 100_000,
+      ly_do: "đúng bữa trưa, hôm đó thứ Tư — ngày thường",
+    });
+    const [toi] = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: "toi", match: { table: "nha_hang", id: 4, set_menu_id: null, confidence: 0.8 } }),
+    ]), maps, "2026-09-05"); // thứ Bảy
+    expect(toi.set_tu_chon?.ly_do).toBe("đúng bữa tối, hôm đó thứ Bảy — cuối tuần");
+  });
+
+  it("không có gì để giải thích: nhà hàng 1 set, hoặc AI tự nêu set → không ghi lý do", () => {
+    const [motSet] = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: "toi", match: { table: "nha_hang", id: 3, set_menu_id: null, confidence: 0.6 } }),
+    ]), maps);
+    expect(motSet.set_tu_chon).toBeUndefined();
+    const [aiNeu] = resolveAiItems(wrap([
+      item({ loai: "meal", bua_an: "trua", match: { table: "nha_hang", id: 4, set_menu_id: 22, confidence: 0.8 } }),
+    ]), maps, "2026-09-02");
+    expect(aiNeu.set_tu_chon).toBeUndefined();
+  });
+
   it("ngày thứ N tính từ ngày đi — đêm cuối tuần rơi vào giữa tour vẫn đúng set", () => {
     // đi thứ Năm 03/09, ngày thứ 3 của tour = thứ Bảy 05/09
     const [r] = resolveAiItems(wrap([

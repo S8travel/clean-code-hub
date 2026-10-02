@@ -239,6 +239,30 @@ describe("apGiaTauHaLong — áp giá theo đúng tàu của đoàn", () => {
     expect(ra[2].don_gia).toBe(1_000_000 + VE_VINH_HA_LONG); // ngày 5: Dolphin
   });
 
+  it("để lại đủ dấu vết cho chú thích: giá set, tên set, tàu của dòng vé", () => {
+    const [an, ve] = apGiaTauHaLong([buffetTrenTau(), veDolphin({ don_gia: 310_000 })], maps, "2026-09-01");
+    expect(an.tau_ha_long).toMatchObject({ ten: "Dolphin Cruise", gia_set: 1_000_000, set_ten: "Buffet" });
+    expect(ve.ve_vinh_gop_tau).toBe("Dolphin Cruise");
+  });
+
+  it("giữ giá sổ tay vì không thấy tên tàu → đánh dấu giu_gia_cu, không phải thiếu giá", () => {
+    // Dòng ăn chung chung, có giá sổ tay, cả ngày không dòng nào nêu tên tàu.
+    const [an] = apGiaTauHaLong([buffetTrenTau()], maps, "2026-09-01");
+    expect(an.tau_ha_long?.giu_gia_cu).toBe(true);
+    expect(an.tau_ha_long?.thieu_gia).toBe(false);
+  });
+
+  it("đọc ra tàu thu vé riêng mà thiếu giá set → ghi thu_ve_rieng để nhắc cộng vé", () => {
+    const mapsDolphinKhongGia: ResolveMaps = {
+      ...maps,
+      setMenu: new Map([...maps.setMenu].filter(([id]) => id !== 3)),
+    };
+    const [an] = apGiaTauHaLong(
+      [buffetTrenTau({ don_gia: 0, nguon_gia: undefined }), veDolphin()], mapsDolphinKhongGia, "2026-09-01",
+    );
+    expect(an.tau_ha_long).toMatchObject({ ten: "Dolphin Cruise", thieu_gia: true, thu_ve_rieng: true });
+  });
+
   it("trả mảng MỚI, không sửa tại chỗ", () => {
     const goc = [buffetTrenTau(), veDolphin({ don_gia: 310_000 })];
     const ra = apGiaTauHaLong(goc, maps, "2026-09-01");

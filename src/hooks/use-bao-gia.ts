@@ -35,6 +35,13 @@ export interface BaoGiaItem {
   // Tên gốc tiếng Trung (từ AI trích lịch trình ZH) — hiển thị song ngữ trong
   // bảng costing kiểu Excel. Item nhập tay/không có → bỏ trống.
   ten_zh?: string;
+  // Câu giải thích các LUẬT đã tự đổi giá / để 0 / chọn giúp dòng này (tàu Hạ
+  // Long, cụm Ba Đình, combo gồm bữa, chọn set…) — chụp lúc bấm Áp dụng ở màn
+  // AI, hiện ngay dưới tên dịch vụ. Chỉ dùng nội bộ: KHÔNG đưa ra bản chào đối tác.
+  chu_thich_luat?: import("@/lib/bao-gia-chu-thich-luat").ChuThichLuat[];
+  // Đơn giá lúc chụp chú thích. Khác `don_gia` hiện tại = đã sửa tay sau đó,
+  // câu giải thích nói về mức cũ → bảng hiện thêm cảnh báo.
+  gia_ap_luat?: number;
 }
 
 // Một khoản CHI PHÍ KHÁC — thu thêm ngoài dịch vụ theo ngày (KS/ăn/vé/xe) và ngoài
