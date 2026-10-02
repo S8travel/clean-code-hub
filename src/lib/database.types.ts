@@ -1999,6 +1999,7 @@ export type Database = {
           created_at: string | null
           doan_id: number | null
           doan_nhom_id: number
+          dong_ghi_chu: Json
           id: number
           khach_san_id: number | null
           ks_loai_phong: string | null
@@ -2021,6 +2022,7 @@ export type Database = {
           created_at?: string | null
           doan_id?: number | null
           doan_nhom_id: number
+          dong_ghi_chu?: Json
           id?: number
           khach_san_id?: number | null
           ks_loai_phong?: string | null
@@ -2043,6 +2045,7 @@ export type Database = {
           created_at?: string | null
           doan_id?: number | null
           doan_nhom_id?: number
+          dong_ghi_chu?: Json
           id?: number
           khach_san_id?: number | null
           ks_loai_phong?: string | null

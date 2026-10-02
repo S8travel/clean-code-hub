@@ -114,6 +114,25 @@ describe("useSaveDieuTour — lưu Điều tour", () => {
     expect(tim("doan_ngay_item", (r) => r.doan_ngay_id === 103)).toHaveLength(0);
   });
 
+  it("dòng ghi chú tự do → chỉ ghi vào ngày (đúng chỗ, bỏ dòng rỗng), không đụng cảnh điểm / chi phí", async () => {
+    const { db, tim } = await luu("thêm dòng ghi chú tự do ngày 1 (đầu ngày + cuối ngày)");
+    expect(tim("doan_ngay", (r) => r.id === 101)[0].dong_ghi_chu).toEqual([
+      { sau: 0, noi_dung: "Bay VN1823 HAN→PQC 07:00" },
+      { sau: 2, noi_dung: "19:00 Gala dinner" },
+    ]);
+    expect(db.nhatKy.filter((l) => l.bang === "doan_ngay" && l.lenh === "update")).toHaveLength(1);
+    expect(db.soLenhGhi("doan_ngay_item") + db.soLenhGhi("doan_chi_phi")).toBe(0);
+    expect(tim("activity_log", () => true).map((r) => r.mo_ta)).toEqual([
+      `Ngày 1: thêm ghi chú "Bay VN1823 HAN→PQC 07:00"`,
+      `Ngày 1: thêm ghi chú "19:00 Gala dinner"`,
+    ]);
+  });
+
+  it("ngày đã có dòng ghi chú, lưu lại y nguyên → KHÔNG ghi gì", async () => {
+    const { db } = await luu("lưu lại y nguyên khi ngày đã có dòng ghi chú");
+    expect(db.soLenhGhi()).toBe(0);
+  });
+
   it("đổi set menu → booking nhà hàng nhận set mới + món", async () => {
     const { tim } = await luu("đổi set menu trưa ngày 1");
     expect(tim("doan_booking_nh", (r) => r.id === 3001)[0])

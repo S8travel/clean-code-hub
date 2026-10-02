@@ -45,7 +45,7 @@ const ngay = (id: number, ngay_so: number, p: Partial<Row> = {}, nhom = 10): Row
   id, doan_id: 1, doan_nhom_id: nhom, ngay_so, ngay_date: `2026-10-0${4 + ngay_so}`, thu: `T${1 + ngay_so}`,
   thanh_pho: "Hà Nội", an_trua_nha_hang_id: null, an_toi_nha_hang_id: null, an_trua_set_menu_id: null,
   an_toi_set_menu_id: null, an_trua_ghi_chu: null, an_toi_ghi_chu: null, khach_san_id: null,
-  ks_ma_code: null, ks_loai_phong: null, ...p,
+  ks_ma_code: null, ks_loai_phong: null, dong_ghi_chu: [], ...p,
 });
 const item = (id: number, doan_ngay_id: number, canh_diem_id: number, thu_tu: number, p: Partial<Row> = {}): Row => {
   const c = canhDiemList.find((x) => x.id === canh_diem_id)!;

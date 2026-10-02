@@ -19,6 +19,8 @@ import { CSS } from "@dnd-kit/utilities";
 import { SearchableSelect } from "@/components/SearchableSelect";
 import type { DayLocal, DayItemLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
 import { checkCanhDiemDeletable, checkNhaHangDeletable } from "@/hooks/use-dieu-tour";
+import { laDongGhiChu } from "@/lib/dong-ghi-chu";
+import { DongGhiChuInput } from "./DongGhiChuInput";
 import { useSetMenus } from "@/hooks/use-nha-hang";
 import { toast } from "sonner";
 import { t, useTranslate } from "@/lib/i18n";
@@ -37,6 +39,9 @@ interface Props {
   doanId?: number; // optional: SeriPage không có doanId, các check NH/KS sẽ skip
   lockKhachSan?: boolean; // mẫu seri: khoá cột khách sạn
   allowRemove?: boolean; // false (ngữ cảnh đoàn): ẩn nút xóa ngày — số ngày điều khiển qua ngày đi/về ở Sửa đoàn
+  /** Cho thêm dòng ghi chú tự do (chuyến bay, sự kiện...) xen giữa cảnh điểm — chỉ ngữ
+   *  cảnh đoàn; mẫu seri không có chỗ lưu. Xem lib/dong-ghi-chu.ts. */
+  choDongGhiChu?: boolean;
 }
 
 // Wrapper hỗ trợ kéo-thả sort cho 1 dòng cảnh điểm. Children-as-function để
@@ -195,7 +200,7 @@ function SetMenuSelect({
   );
 }
 
-export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId, lockKhachSan, allowRemove = true }: Props) {
+export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangList, khachSanList, canhDiemOptions, nhaHangOptions, khachSanOptions, dayLabel, doanId, lockKhachSan, allowRemove = true, choDongGhiChu = false }: Props) {
   useTranslate();
   const update = (partial: Partial<DayLocal>) => onChange({ ...day, ...partial });
   const updateItems = (items: DayItemLocal[]) => onChange({ ...day, items });
@@ -224,6 +229,30 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
   const updateGhiChu = (idx: number, val: string) => {
     const newItems = [...day.items];
     newItems[idx] = { ...newItems[idx], ghi_chu: val };
+    updateItems(newItems);
+  };
+
+  const updateDongGhiChu = (idx: number, val: string) => {
+    const newItems = [...day.items];
+    newItems[idx] = { ...newItems[idx], dong_ghi_chu: val };
+    updateItems(newItems);
+  };
+
+  // Dòng ghi chú không dính tiền / booking → gỡ thẳng, không cần hỏi DB như cảnh điểm.
+  const xoaDong = (idx: number) => updateItems(day.items.filter((_, i) => i !== idx));
+
+  // Chữ OP gõ trong bảng chọn cảnh điểm (không khớp / không muốn chọn cảnh điểm) → dòng
+  // trống đang chọn biến thành dòng ghi chú. Dòng cuối thì mở tiếp bảng chọn dòng kế, y
+  // như vừa chọn xong một cảnh điểm — OP nhập liền cả ngày không phải đổi thao tác.
+  const taoDongGhiChu = (idx: number, chu: string) => {
+    const newItems = [...day.items];
+    newItems[idx] = { canh_diem_id: 0, thu_tu: newItems[idx].thu_tu, dong_ghi_chu: chu };
+    if (idx === day.items.length - 1) {
+      newItems.push({ canh_diem_id: 0, thu_tu: newItems.length + 1, ghi_chu: "" });
+      setAutoOpenIdx(idx + 1);
+    } else {
+      setAutoOpenIdx(null);
+    }
     updateItems(newItems);
   };
 
@@ -272,6 +301,40 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
           <SortableContext items={sortableIds} strategy={verticalListSortingStrategy}>
             {day.items.map((item, idx) => {
               const sortId = sortableIds[idx];
+              if (laDongGhiChu(item)) {
+                return (
+                  <SortableRow key={sortId} id={sortId}>
+                    {({ setNodeRef, style, listeners, attributes }) => (
+                      <div ref={setNodeRef} style={style} className="flex items-start gap-0.5">
+                        <button
+                          type="button"
+                          {...attributes}
+                          {...listeners}
+                          className="cursor-grab active:cursor-grabbing text-muted-foreground/30 hover:text-muted-foreground p-0.5 mt-0.5 print-hide touch-none shrink-0"
+                          title={t("Kéo để đổi thứ tự")}
+                        >
+                          <GripVertical className="h-3 w-3" />
+                        </button>
+                        <DongGhiChuInput
+                          value={item.dong_ghi_chu ?? ""}
+                          onChange={(v) => updateDongGhiChu(idx, v)}
+                          onXong={() => { if (!item.dong_ghi_chu?.trim()) xoaDong(idx); }}
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-6 shrink-0 print-hide"
+                          title={t("Xóa dòng ghi chú")}
+                          onClick={() => xoaDong(idx)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
+                  </SortableRow>
+                );
+              }
               const noteOpen = noteOpenMap[idx] || !!(item.ghi_chu?.trim());
               const selectedCanhDiem = canhDiemList.find((c) => c.id === item.canh_diem_id);
               return (
@@ -307,6 +370,12 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
                             }
                             updateItems(newItems);
                           }}
+                          searchPlaceholder={choDongGhiChu ? t("Tìm cảnh điểm hoặc gõ ghi chú...") : undefined}
+                          taoTuChu={choDongGhiChu && !item.canh_diem_id ? {
+                            nhan: t("Dùng làm dòng ghi chú"),
+                            ghiChu: t("Không tính chi phí"),
+                            onTao: (chu) => taoDongGhiChu(idx, chu),
+                          } : undefined}
                           placeholder={t("Chọn cảnh điểm")}
                           className={`h-auto py-0.5 px-2 text-[13px] [&_span]:!whitespace-normal [&_span]:!overflow-visible [&>svg]:h-3 [&>svg]:w-3${item.canh_diem_id ? " bg-blue-50 text-blue-900 font-medium" : ""}`}
                         />
@@ -396,7 +465,8 @@ export default function DayRow({ day, onChange, onRemove, canhDiemList, nhaHangL
           }}
           className="w-full py-1.5 border border-dashed border-border rounded-md text-xs text-muted-foreground hover:border-foreground transition-colors print-hide"
         >
-          <Plus className="inline h-3 w-3 mr-1" /> {t("Thêm cảnh điểm / dịch vụ")}
+          <Plus className="inline h-3 w-3 mr-1" />
+          {choDongGhiChu ? t("Thêm cảnh điểm / dịch vụ / ghi chú") : t("Thêm cảnh điểm / dịch vụ")}
         </button>
       </div>
 
