@@ -20,6 +20,8 @@ describe("parseDoanTab", () => {
   it("nhận tab hợp lệ", () => {
     expect(parseDoanTab("booking-ks")).toBe("booking-ks");
     expect(parseDoanTab("chi-phi")).toBe("chi-phi");
+    // Chuông "đối tác gửi giấy tờ" mở thẳng tab Tài liệu.
+    expect(parseDoanTab("tai-lieu")).toBe("tai-lieu");
   });
   it("từ chối rác / null → null (Tabs không rỗng ruột)", () => {
     expect(parseDoanTab("../../etc")).toBeNull();

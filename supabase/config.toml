@@ -79,6 +79,12 @@ verify_jwt = false
 [functions.yeu-cau-doi-tac]
 verify_jwt = false
 
+# giay-to-doi-tac: đại lý tải 分房表 (chia phòng) / 合約 (hợp đồng) cho một đoàn từ cổng 外網.
+# Gọi bởi edge fn 'gui-giay-to' bên cổng (không có user JWT của CRM), chặn
+# bằng header 'x-portal-secret' khớp PORTAL_TRAO_DOI_SECRET. Xem index.ts.
+[functions.giay-to-doi-tac]
+verify_jwt = false
+
 # yeu-cau-sua-bao-gia: đối tác bấm "yêu cầu sửa chương trình" trên cổng 外網.
 # Gọi bởi edge fn 'gui-yeu-cau-sua' bên cổng (không có user JWT của CRM), chặn
 # bằng header 'x-portal-secret' khớp PORTAL_TRAO_DOI_SECRET.

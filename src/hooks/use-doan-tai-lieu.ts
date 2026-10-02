@@ -2,13 +2,20 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { externalSupabase } from "@/lib/supabase-external";
 
-export type DoanTaiLieuLoai = "bao_gia" | "hop_dong" | "danh_sach_khach" | "khac";
+export type DoanTaiLieuLoai = "bao_gia" | "hop_dong" | "danh_sach_khach" | "chia_phong" | "khac";
 
-/** 3 loại fixed (1 file mỗi loại). 'khac' = tài liệu tùy chỉnh (nhiều file). */
+/**
+ * hop_dong / danh_sach_khach / chia_phong: 1 file mỗi loại (tải lại = thay).
+ * bao_gia + 'khac' (tài liệu tùy chỉnh): nhiều file.
+ * chia_phong (分房表) + hop_dong (合約): đại lý tải lên cổng đối tác (edge fn
+ * giay-to-doi-tac), hoặc OP tải ở đây khi đại lý gửi qua mail/LINE. Cổng dựa vào hai
+ * loại này để hiện "đã chia phòng" / "đã có hợp đồng" trên danh sách đoàn.
+ */
 export const TAI_LIEU_LABEL: Record<DoanTaiLieuLoai, string> = {
   bao_gia: "Báo giá",
   hop_dong: "Hợp đồng",
   danh_sach_khach: "Danh sách khách",
+  chia_phong: "Chia phòng",
   khac: "Tài liệu khác",
 };
 

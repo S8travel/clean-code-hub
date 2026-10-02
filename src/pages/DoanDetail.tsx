@@ -143,8 +143,15 @@ export default function DoanDetail() {
   const [initialized, setInitialized] = useState(false);
   // Deep-link ?tab= từ màn checklist "Hủy đoàn" (Index.tsx) nhảy thẳng vào tab
   // cần dọn. Whitelist ở lib — `?tab=<rác>` phải rơi về dieu-tour, không để Tabs
-  // rỗng ruột. Chỉ đọc lúc mount; sau đó tab do người dùng điều khiển.
+  // rỗng ruột. Sau đó tab do người dùng điều khiển.
   const [activeTab, setActiveTab] = useState<string>(() => parseDoanTab(searchParams.get("tab")) ?? "dieu-tour");
+  // Bấm chuông khi ĐANG mở một đoàn: route giữ nguyên component nên useState ở trên
+  // không chạy lại — phải theo dõi ?tab= (và đổi đoàn) thì link chuông mới mở đúng tab.
+  const tabTuUrl = searchParams.get("tab");
+  useEffect(() => {
+    const tab = parseDoanTab(tabTuUrl);
+    if (tab) setActiveTab(tab);
+  }, [tabTuUrl, doanId]);
   const [showWordPreview, setShowWordPreview] = useState(false);
   const [showRemap, setShowRemap] = useState(false);
   const [saveStatus, setSaveStatus] = useState<"idle" | "pending" | "saving" | "saved" | "error">("idle");

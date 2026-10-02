@@ -134,6 +134,10 @@ export async function dongBoTaiLieu(
 ): Promise<{ chep: number; go: number }> {
   if (!doan.length) return { chep: 0, go: 0 };
   const theoCrmId = new Map(doan.map((d) => [d.crm_id, d]));
+  // Mốc bắt đầu lượt: đại lý tải 分房表 / 合約 qua edge fn gui-giay-to bên cổng ghi
+  // thẳng dòng tai_lieu (pushed_at = lúc ghi). Dòng ghi SAU mốc này không nằm trong
+  // danh sách vừa đọc — bước gỡ cuối hàm phải chừa nó ra, kẻo xoá oan file vừa gửi.
+  const batDau = new Date().toISOString();
 
   const { data, error } = await crm
     .from("doan_tai_lieu")
@@ -207,7 +211,7 @@ export async function dongBoTaiLieu(
   const dieuKien = conLai.length
     ? `crm_tai_lieu_id=not.in.(${conLai.join(",")})`
     : "crm_tai_lieu_id=gt.0";
-  const rXoa = await cong(`tai_lieu?doan_id=in.(${congIds.join(",")})&${dieuKien}&select=id`, {
+  const rXoa = await cong(`tai_lieu?doan_id=in.(${congIds.join(",")})&${dieuKien}&pushed_at=lt.${encodeURIComponent(batDau)}&select=id`, {
     method: "DELETE",
     headers: { Prefer: "return=representation" },
   });
