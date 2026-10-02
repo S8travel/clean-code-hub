@@ -76,11 +76,12 @@ export function useCloneDoan() {
       }
       const fallbackNhom = defNhom.id;
 
-      // 3. Copy doan_ngay (giữ nội dung chương trình: thành phố, bữa ăn, set menu, KS)
+      // 3. Copy doan_ngay (giữ nội dung chương trình: thành phố, bữa ăn, set menu, KS,
+      //    dòng ghi chú tự do)
       const { data: srcDays } = await externalSupabase
         .from("doan_ngay")
         .select(
-          "id, doan_nhom_id, ngay_so, ngay_date, thu, thanh_pho, an_trua_nha_hang_id, an_trua_set_menu_id, an_trua_so_khach, an_trua_ghi_chu, an_toi_nha_hang_id, an_toi_set_menu_id, an_toi_so_khach, an_toi_ghi_chu, khach_san_id, ks_ma_code, ks_loai_phong",
+          "id, doan_nhom_id, ngay_so, ngay_date, thu, thanh_pho, an_trua_nha_hang_id, an_trua_set_menu_id, an_trua_so_khach, an_trua_ghi_chu, an_toi_nha_hang_id, an_toi_set_menu_id, an_toi_so_khach, an_toi_ghi_chu, khach_san_id, ks_ma_code, ks_loai_phong, dong_ghi_chu",
         )
         .eq("doan_id", sourceDoanId)
         .order("ngay_so", { ascending: true });

@@ -18,6 +18,7 @@ import { saveAs } from "file-saver";
 import { getLogoData, companyLogoTable } from "@/lib/docx-logo";
 import type { DayLocal, CanhDiemItem, NhaHangItem, KhachSanItem } from "@/hooks/use-dieu-tour";
 import type { SetMenu } from "@/hooks/use-nha-hang";
+import { laDongGhiChu } from "@/lib/dong-ghi-chu";
 
 // ─── Constants ─────────────────────────────────────────────────────────────
 /** Lưu ý in kèm dòng OP — dùng chung Word export + modal xem trước + bảng trên màn hình. */
@@ -216,6 +217,13 @@ export function computeExportCells(data: DieuTourExportData): DayExportCell[] {
     const ctLines: string[] = [];
     if (day.thanh_pho) ctLines.push(day.thanh_pho);
     for (const item of day.items) {
+      // Dòng ghi chú tự do (chuyến bay, sự kiện...) — in đúng chỗ, không gạch đầu dòng
+      // để khỏi lẫn với cảnh điểm. lib/dong-ghi-chu.ts.
+      if (laDongGhiChu(item)) {
+        const noiDung = (item.dong_ghi_chu ?? "").trim();
+        if (noiDung) ctLines.push(noiDung);
+        continue;
+      }
       const cd = canhDiemMap.get(item.canh_diem_id);
       if (cd) {
         ctLines.push(`• ${cd.ten}`);
@@ -459,6 +467,11 @@ export async function exportDieuTourWord(data: DieuTourExportData) {
     const ctParas: Paragraph[] = [];
     if (day.thanh_pho) ctParas.push(p(day.thanh_pho, { bold: true, align: AlignmentType.CENTER }));
     for (const item of day.items) {
+      if (laDongGhiChu(item)) {
+        const noiDung = (item.dong_ghi_chu ?? "").trim();
+        if (noiDung) ctParas.push(...noiDung.split("\n").map((dong) => p(dong)));
+        continue;
+      }
       const cd = canhDiemMap.get(item.canh_diem_id);
       if (cd) {
         ctParas.push(p(`• ${cd.ten}`));

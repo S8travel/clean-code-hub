@@ -77,6 +77,9 @@ doan_ngay
   an_trua_nha_hang_id, an_trua_set_menu_id, an_trua_so_khach
   an_toi_nha_hang_id,  an_toi_set_menu_id,  an_toi_so_khach
   khach_san_id, ks_ma_code, ks_loai_phong
+  dong_ghi_chu  jsonb [{sau, noi_dung}] — dòng ghi chú tự do cột Chương trình (chuyến
+                bay, sự kiện...). KHÔNG phải cảnh điểm, không sinh chi phí/booking.
+                sau = số cảnh điểm đứng trước. Đọc/ghi qua lib/dong-ghi-chu.ts
 
 doan_ngay_item
   id, doan_ngay_id, doan_id, canh_diem_id

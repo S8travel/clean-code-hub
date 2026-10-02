@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Check, ChevronsUpDown, PenLine } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { chuanHoaTim } from "@/lib/bao-gia-loc";
 import { Button } from "@/components/ui/button";
 import {
   Command,
@@ -37,6 +38,24 @@ interface Props {
   onClose?: () => void;
   /** Khoá chọn (vd chỉ 1 lựa chọn hợp lệ) — trigger không bấm được */
   disabled?: boolean;
+  /** Cho dùng chữ đang gõ làm một mục tự do (vd dòng ghi chú ở cột Chương trình của Điều
+   *  tour). Có chữ trong ô tìm → cuối danh sách thêm một dòng. Không khớp mục nào thì nó là
+   *  dòng duy nhất nên Enter chọn luôn nó; còn khớp thì Enter vẫn chọn mục khớp đầu tiên. */
+  taoTuChu?: {
+    nhan: string;
+    /** Dòng phụ nhỏ bên dưới, vd "Không tính chi phí". */
+    ghiChu?: string;
+    onTao: (chu: string) => void;
+  };
+}
+
+/** Lọc không phân biệt dấu / hoa thường / ký tự toàn chiều rộng, theo từng từ: gõ
+ *  "cho dem" hay "phu quoc cho" đều ra "Chợ đêm Phú Quốc". Trước đây so nguyên chuỗi có
+ *  dấu — gõ thiếu dấu là "Không tìm thấy" dù mục nằm ngay trong danh sách. */
+function locTheoTuKhoa<T>(ds: T[], nhanDaChuan: string[], search: string): T[] {
+  const tuKhoa = chuanHoaTim(search).split(" ").filter(Boolean);
+  if (tuKhoa.length === 0) return ds;
+  return ds.filter((_, i) => tuKhoa.every((tk) => nhanDaChuan[i].includes(tk)));
 }
 
 export function SearchableSelect({
@@ -50,6 +69,7 @@ export function SearchableSelect({
   autoOpen = false,
   onClose,
   disabled = false,
+  taoTuChu,
 }: Props) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -63,9 +83,9 @@ export function SearchableSelect({
   const selectedOption = options.find((o) => o.value === value);
   const selectedLabel = selectedOption?.label;
 
-  const filtered = search
-    ? options.filter((o) => o.label?.toLowerCase().includes(search.toLowerCase()))
-    : options;
+  const nhanDaChuan = useMemo(() => options.map((o) => chuanHoaTim(o.label)), [options]);
+  const filtered = locTheoTuKhoa(options, nhanDaChuan, search);
+  const chuGo = search.trim();
 
   const handleOpenChange = (v: boolean) => {
     setOpen(v);
@@ -120,6 +140,32 @@ export function SearchableSelect({
                 </CommandItem>
               ))}
             </CommandGroup>
+            {taoTuChu && chuGo && (
+              <CommandGroup>
+                {filtered.length === 0 && (
+                  <p className="px-2 pb-1 text-xs text-muted-foreground">{emptyText}</p>
+                )}
+                <CommandItem
+                  value="__tao_tu_chu__"
+                  className="items-start"
+                  onSelect={() => {
+                    taoTuChu.onTao(chuGo);
+                    setOpen(false);
+                    setSearch("");
+                  }}
+                >
+                  <PenLine className="mr-2 mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+                  <div className="min-w-0 break-words">
+                    <div>
+                      {taoTuChu.nhan}: <span className="font-medium">“{chuGo}”</span>
+                    </div>
+                    {taoTuChu.ghiChu && (
+                      <div className="text-[11px] text-muted-foreground">{taoTuChu.ghiChu}</div>
+                    )}
+                  </div>
+                </CommandItem>
+              </CommandGroup>
+            )}
           </CommandList>
         </Command>
       </PopoverContent>

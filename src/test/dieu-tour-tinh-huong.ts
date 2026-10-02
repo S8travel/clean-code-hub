@@ -149,6 +149,36 @@ export const TINH_HUONG: TinhHuong[] = [
     payload: () => taoPayload({ days: suaNgay(3, (d) => { d.items = []; }) }),
   },
   {
+    ten: "thêm dòng ghi chú tự do ngày 1 (đầu ngày + cuối ngày)",
+    payload: () => taoPayload({
+      days: suaNgay(1, (d) => {
+        d.items = [
+          { canh_diem_id: 0, thu_tu: 0, dong_ghi_chu: "Bay VN1823 HAN→PQC 07:00" },
+          ...d.items,
+          { canh_diem_id: 0, thu_tu: 0, dong_ghi_chu: "  19:00 Gala dinner  " },
+          { canh_diem_id: 0, thu_tu: 0, dong_ghi_chu: "   " },
+        ];
+      }),
+    }),
+  },
+  {
+    ten: "lưu lại y nguyên khi ngày đã có dòng ghi chú",
+    chuanBi: (db) => {
+      // jsonb trả khoá theo độ dài tên: "sau" trước "noi_dung".
+      Object.assign(db.doan_ngay[0], { dong_ghi_chu: [{ sau: 0, noi_dung: "Bay VN1823" }, { sau: 1, noi_dung: "Tự do" }] });
+    },
+    payload: () => taoPayload({
+      days: suaNgay(1, (d) => {
+        d.items = [
+          { canh_diem_id: 0, thu_tu: 0, dong_ghi_chu: "Bay VN1823" },
+          d.items[0],
+          { canh_diem_id: 0, thu_tu: 0, dong_ghi_chu: "Tự do" },
+          d.items[1],
+        ];
+      }),
+    }),
+  },
+  {
     ten: "KS từng hủy (da_huy) quay lại tour",
     chuanBi: (db) => {
       Object.assign(db.doan_booking_ks[0], { trang_thai: "da_huy" });

@@ -15,6 +15,7 @@ import { resolveCanhDiemChiPhiTarget } from "@/lib/canh-diem-cascade";
 import { canGuiBookingDV } from "@/lib/booking-dv-filter";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
 import { canGhi } from "@/lib/can-ghi";
+import { tachDongGhiChu, tronDongGhiChu, docDongGhiChu, diffDongGhiChu } from "@/lib/dong-ghi-chu";
 import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 // ── Lookup types ──
@@ -83,6 +84,8 @@ export interface DoanNgayRow {
   khach_san_id: number | null;
   ks_ma_code: string | null;
   ks_loai_phong: string | null;
+  /** jsonb dòng ghi chú tự do — đọc qua docDongGhiChu (lib/dong-ghi-chu.ts). */
+  dong_ghi_chu?: unknown;
 }
 
 export interface DoanNgayItemRow {
@@ -104,6 +107,10 @@ export interface DayItemLocal {
   canh_diem_id: number;
   thu_tu: number;
   ghi_chu?: string;
+  /** Có (kể cả chuỗi rỗng lúc đang gõ) = dòng ghi chú tự do, KHÔNG phải cảnh điểm; khi
+   *  đó canh_diem_id = 0 nên mọi chỗ lọc `canh_diem_id > 0` tự bỏ qua. Lưu ở
+   *  doan_ngay.dong_ghi_chu, không ở doan_ngay_item — xem lib/dong-ghi-chu.ts. */
+  dong_ghi_chu?: string;
 }
 
 export interface DayLocal {
@@ -286,7 +293,7 @@ export function mergeDaysWithDB(generated: DayLocal[], dbRows: DoanNgayRow[], db
       }
     }
 
-    const items = [...dedupByCanhDiem.values()]
+    const canhDiemItems: DayItemLocal[] = [...dedupByCanhDiem.values()]
       .sort((a, b) => a.thu_tu - b.thu_tu)
       .map((it) => ({
         id: it.id,
@@ -294,6 +301,12 @@ export function mergeDaysWithDB(generated: DayLocal[], dbRows: DoanNgayRow[], db
         thu_tu: it.thu_tu,
         ghi_chu: it.ghi_chu || "",
       }));
+    // Dòng ghi chú tự do xen vào giữa cảnh điểm theo mốc đã lưu (lib/dong-ghi-chu.ts).
+    const items = tronDongGhiChu(canhDiemItems, docDongGhiChu(dbRow.dong_ghi_chu), (g) => ({
+      canh_diem_id: 0,
+      thu_tu: 0,
+      dong_ghi_chu: g.noi_dung,
+    }));
 
     return {
       ...day,
@@ -814,7 +827,7 @@ export function useSaveDieuTour() {
       // không đổi gì (canGhi — thiếu cột là coi như khác, vẫn ghi).
       const { data: existingNgayRows } = await externalSupabase
         .from("doan_ngay")
-        .select("id, doan_id, doan_nhom_id, ngay_so, ngay_date, thu, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, an_trua_ghi_chu, an_toi_ghi_chu, thanh_pho")
+        .select("id, doan_id, doan_nhom_id, ngay_so, ngay_date, thu, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, an_trua_ghi_chu, an_toi_ghi_chu, thanh_pho, dong_ghi_chu")
         .eq("doan_id", doanId)
         .eq("doan_nhom_id", defaultDoanNhomId);
       type ExistingNgayRow = NonNullable<typeof existingNgayRows>[number];
@@ -930,6 +943,8 @@ export function useSaveDieuTour() {
       // defaultDoanNhomId đã resolve + guard non-null ở đầu hàm (~line 571)
       for (let idx = 0; idx < days.length; idx++) {
         const day = days[idx];
+        // Dòng ghi chú tự do của ngày (không phải cảnh điểm) — lib/dong-ghi-chu.ts.
+        const dongGhiChu = tachDongGhiChu(day.items);
         const ngayPayload: TablesInsert<"doan_ngay"> = {
           doan_id: doanId,
           doan_nhom_id: defaultDoanNhomId,
@@ -946,6 +961,7 @@ export function useSaveDieuTour() {
           khach_san_id: day.khach_san_id,
           ks_ma_code: day.ks_ma_code || null,
           ks_loai_phong: day.ks_loai_phong || null,
+          dong_ghi_chu: dongGhiChu,
         };
 
         let doanNgayId = day.id;
@@ -1011,6 +1027,9 @@ export function useSaveDieuTour() {
           if ((oldRow.thanh_pho ?? "").trim() !== (day.thanh_pho ?? "").trim()) {
             dieuTourLogs.push(`${label}: thành phố "${labelTxt(oldRow.thanh_pho)}" → "${labelTxt(day.thanh_pho)}"`);
           }
+          const ghiChuDoi = diffDongGhiChu(docDongGhiChu(oldRow.dong_ghi_chu), dongGhiChu);
+          for (const nd of ghiChuDoi.them) dieuTourLogs.push(`${label}: thêm ghi chú "${nd}"`);
+          for (const nd of ghiChuDoi.bo) dieuTourLogs.push(`${label}: bỏ ghi chú "${nd}"`);
         }
 
         if (!doanNgayId) continue;

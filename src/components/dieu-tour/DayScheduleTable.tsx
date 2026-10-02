@@ -17,9 +17,11 @@ interface Props {
   lockKhachSan?: boolean;
   /** false (ngữ cảnh đoàn): ẩn nút Thêm/Xóa ngày — số ngày điều khiển qua ngày đi/về ở Sửa đoàn. Mặc định true (seri). */
   allowDayMutation?: boolean;
+  /** Cho thêm dòng ghi chú tự do trong cột Chương trình — chỉ ngữ cảnh đoàn (seri không lưu). */
+  choDongGhiChu?: boolean;
 }
 
-export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId, lockKhachSan, allowDayMutation = true }: Props) {
+export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangList, khachSanList, getDayLabel, doanId, lockKhachSan, allowDayMutation = true, choDongGhiChu = false }: Props) {
   useTranslate();
   const canhDiemOptions = useMemo(() =>
     canhDiemList.map((c) => ({
@@ -118,6 +120,7 @@ export default function DayScheduleTable({ days, setDays, canhDiemList, nhaHangL
             doanId={doanId}
             lockKhachSan={lockKhachSan}
             allowRemove={allowDayMutation}
+            choDongGhiChu={choDongGhiChu}
           />
         ))}
       </div>
