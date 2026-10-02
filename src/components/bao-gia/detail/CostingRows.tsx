@@ -3,6 +3,7 @@ import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 import type { BaoGiaItem } from "@/hooks/use-bao-gia";
 import { AddServiceRow } from "@/components/bao-gia/AddServiceRow";
+import { ChuThichLuatList } from "@/components/bao-gia/ChuThichLuatList";
 import { fmtVnd, fmtUsd, setSlOverride, type CostingGroup, type CostingRow } from "./helpers";
 
 // Dòng của bảng chi phí — tách khỏi CostingSheetSection cho file khỏi phình.
@@ -128,6 +129,8 @@ function ItemRow({
           )}
         </span>
         {row.ten_zh && <div className="text-[10px] text-slate-400 px-1">{row.ten_zh}</div>}
+        {/* Luật đã tự đổi giá / để 0 / chọn giúp dòng này (chụp lúc Áp dụng ở màn AI) */}
+        <ChuThichLuatList items={row.chu_thich_luat} className="px-1" />
       </td>
       {/* ĐG USD (auto) */}
       <td className="border border-slate-200 px-2 py-1 text-right text-slate-500 tabular-nums">{fmtUsd(row.don_gia_usd)}</td>

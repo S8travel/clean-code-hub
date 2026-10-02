@@ -23,7 +23,7 @@ import {
 } from "@/lib/bao-gia-so-tay";
 import { useIsReadOnly } from "@/hooks/use-permissions";
 import {
-  resolveAiItems, toBaoGiaItems, aliasesToLearn, giaPhongWritebacks, dongChuaChac, usdBudgetPrice,
+  resolveAiItems, aliasesToLearn, giaPhongWritebacks, dongChuaChac, usdBudgetPrice,
   applyKsBuaRules, toKsBuaRules,
   hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
   analyzeCombo, comboPatchForRef, sanitizeDraftRows, newResolvedItem, BUA_LABEL,
@@ -41,6 +41,9 @@ import { resolveStorageUrl } from "@/lib/storage-url";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 import { apGiaTauHaLong } from "@/lib/bao-gia-tau-ha-long";
 import { apVeCumBaDinh } from "@/lib/bao-gia-cum-ba-dinh";
+import { apMonVietHaNoi } from "@/lib/bao-gia-mon-viet-ha-noi";
+import { chuThichLuat, toBaoGiaItemsCoChuThich } from "@/lib/bao-gia-chu-thich-luat";
+import { ChuThichLuatList } from "@/components/bao-gia/ChuThichLuatList";
 import { locDongMayDocTrung, type DongDaBo } from "@/lib/bao-gia-trung-lap";
 
 /** Quy đổi mức USD đối tác ghi → tiền Việt, cho sổ tay dùng khi bên mình chưa
@@ -156,7 +159,9 @@ export function BaoGiaAiImport({
           sanitizeDraftRows(savedReview.items),
           banDo, quyDoiUsdSoTay, giuNguyenDongSuaTay,
         );
-        setRows(maps ? apVeCumBaDinh(apGiaTauHaLong(daSoTay, maps, tourDate), maps) : daSoTay);
+        setRows(maps
+          ? apMonVietHaNoi(apVeCumBaDinh(apGiaTauHaLong(daSoTay, maps, tourDate), maps), maps)
+          : daSoTay);
         // Bản gốc đã cất ở lượt phân tích trước → cột đối chiếu có ngay, khỏi
         // phải phân tích lại chỉ để xem file.
         if (draft.noi_dung_goc?.trim()) setNguonGoc({ kieu: "text", noiDung: draft.noi_dung_goc });
@@ -220,7 +225,10 @@ export function BaoGiaAiImport({
   // ── Tính tiền XEM TRƯỚC ngay trong review ──
   // Chạy CHÍNH costingSheet trên items đang review (qua aiPreviewSheet) → giá
   // hiển thị ở đây khớp 100% bảng chi phí sau khi bấm Áp dụng, không lệch công thức.
-  const previewItems = useMemo(() => toBaoGiaItems(included, daTruCombo), [included, daTruCombo]);
+  // Chụp kèm chú thích luật → báo giá đã lưu vẫn giải thích được từng con số.
+  const previewItems = useMemo(
+    () => toBaoGiaItemsCoChuThich(included, daTruCombo), [included, daTruCombo],
+  );
   const previewSheet = useMemo(
     () => (rows ? aiPreviewSheet(draft, previewItems, soNgay) : null),
     [rows, draft, previewItems, soNgay],
@@ -274,7 +282,9 @@ export function BaoGiaAiImport({
       // dòng vé cùng ngày — bằng chứng của chính đoàn này thắng trí nhớ chung.
       // Luật cụm Ba Đình chạy SAU sổ tay vì chính sổ tay đang nhớ sai cụm này:
       // hai khoá học được đều ghi tiền vé cho dòng CHỈ ĐI NGOÀI.
-      const daApTau = apVeCumBaDinh(apGiaTauHaLong(resolved, maps, tourDate), maps);
+      // Luật món Việt Hà Nội chạy SAU sổ tay: sổ tay đang nhớ cả giá Home Hội An
+      // cho đúng loại dòng này, mà khoá sổ tay không mang thành phố.
+      const daApTau = apMonVietHaNoi(apVeCumBaDinh(apGiaTauHaLong(resolved, maps, tourDate), maps), maps);
       setTen(result.ten_chuong_trinh ?? "");
       setSoNgay(result.so_ngay && result.so_ngay > 0 ? result.so_ngay : 1);
       setRows(daApTau);
@@ -394,91 +404,22 @@ export function BaoGiaAiImport({
   // Danh mục master cho picker đổi/chọn dịch vụ (mọi loại — giống KS).
 
   /** Nhãn nhỏ cho biết GIÁ trên dòng này ở đâu ra — người nhập cần phân biệt
-   *  "sổ tay đã nhớ" với "máy đoán" với "chưa ai điền". Kèm nhãn LỆCH khi bên
-   *  mình tính khác mức tiền đối tác ghi trong lịch trình. */
+   *  "sổ tay đã nhớ" với "máy đoán" với "chưa ai điền". Dòng mà LUẬT quyết giá
+   *  (tàu Hạ Long, cụm Ba Đình…) thì chú thích luật ngay bên dưới đã nói rõ,
+   *  xem lib/bao-gia-chu-thich-luat.ts. */
   const nhanNguon = (r: ResolvedItem) => {
-    // Dòng ăn đã lấy giá theo tàu thì NHÃN TÀU chính là nguồn giá — thêm nhãn
-    // "máy đoán" bên cạnh chỉ làm người nhập không biết tin cái nào.
+    // Dòng ăn đã lấy giá theo tàu → chú thích tàu chính là nguồn giá; thêm nhãn
+    // "máy đoán" bên cạnh chỉ làm người nhập không biết tin cái nào. Ca giữ giá
+    // sổ tay (không thấy tên tàu) thì giá vẫn là của sổ tay → vẫn hiện nhãn.
     const t = r.tau_ha_long;
-    const nguonLaTau = !!t?.ten && !t.thieu_gia && !r.sua_tay;
-    // Dòng cụm Ba Đình để 0 là CỐ Ý (không vào, hoặc vé đã tính ở dòng cùng
-    // ngày) — nhãn cam "cần điền giá" ở đây chỉ dụ người nhập gõ thêm tiền.
-    const cumLa0 = r.cum_ba_dinh === "ngoai_quan" || r.cum_ba_dinh === "da_gom";
-    const chinh = <>{nguonLaTau || cumLa0 ? null : nhanNguonChinh(r)}{nhanTau(r)}{nhanCum(r)}</>;
-    const lech = r.gia_dong_ghi != null && r.don_gia > 0 && r.gia_dong_ghi !== r.don_gia;
-    if (!lech) return chinh;
-    return (
-      <span className="inline-flex items-center gap-1">
-        {chinh}
-        <span
-          className="text-[9px] text-amber-700 border border-amber-300 rounded px-1"
-          title={`Đối tác ghi mức ${fmtVnd(r.gia_dong_ghi ?? 0)} trong lịch trình, bên mình đang tính ${fmtVnd(r.don_gia)} theo giá của mình. Muốn theo đối tác thì sửa ô ĐG VND.`}
-        >
-          ≠ đối tác ghi {fmtVnd(r.gia_dong_ghi ?? 0)}
-        </span>
-      </span>
-    );
-  };
-
-  /** Nhãn TÀU HẠ LONG: nói thẳng giá bữa ăn đang theo con tàu nào. Chỗ sai đắt
-   *  nhất ở đây là im lặng dùng tàu mặc định — nên ca đó phải là nhãn cam. */
-  const nhanTau = (r: ResolvedItem) => {
-    const t = r.tau_ha_long;
-    if (r.ve_vinh_da_gom) {
-      return (
-        <span className="ml-1 text-[9px] text-emerald-700 border border-emerald-300 rounded px-1"
-          title="Vé vịnh đã nằm trong giá bữa ăn trên tàu cùng ngày — để 0 cho khỏi tính tiền hai lần.">
-          đã gồm ở bữa trên tàu
-        </span>
-      );
-    }
-    if (!t) return null;
-    if (t.thieu_gia || !t.ten) {
-      return (
-        <span className="ml-1 text-[9px] text-orange-600 border border-orange-300 rounded px-1"
-          title={t.ten
-            ? `Đọc ra tàu "${t.ten}" nhưng danh mục chưa có giá set cho bữa này — gõ giá vào ô ĐG VND.`
-            : "Cả ngày không dòng nào nêu tên tàu — giá đang lấy theo tàu mặc định. Kiểm lại đoàn đi tàu nào."}>
-          {t.ten ? `tàu ${t.ten} — chưa có giá set` : "chưa rõ tàu"}
-        </span>
-      );
-    }
-    return (
-      <span className={`ml-1 text-[9px] border rounded px-1 ${t.doan ? "text-orange-600 border-orange-300" : "text-sky-700 border-sky-300"}`}
-        title={`Giá lấy theo tàu ${t.ten}${t.ve_vinh ? ` + vé vịnh ${fmtVnd(t.ve_vinh)}` : " (giá danh mục đã gồm vé vịnh)"}.${t.doan ? " Chương trình KHÔNG nêu tên tàu nào — con tàu này là suy ra (dòng máy khớp danh mục, hoặc tàu mặc định). Kiểm lại." : ""}`}>
-        tàu {t.ten}{t.ve_vinh ? " + vé vịnh" : ""}{t.doan ? " (suy ra)" : ""}
-      </span>
-    );
-  };
-
-  /** Nhãn CỤM BA ĐÌNH: nói rõ vì sao dòng để 0 — không vào bên trong, hoặc một
-   *  vé đã tính ở dòng cùng ngày (xem lib/bao-gia-cum-ba-dinh.ts). */
-  const nhanCum = (r: ResolvedItem) => {
-    if (r.cum_ba_dinh === "ngoai_quan") {
-      return (
-        <span className="ml-1 text-[9px] text-emerald-700 border border-emerald-300 rounded px-1"
-          title="Lịch trình ghi chỉ nhìn từ ngoài (外觀) — quảng trường, lăng, chùa Một Cột không mất vé.">
-          không vào — 0 đ
-        </span>
-      );
-    }
-    if (r.cum_ba_dinh === "da_gom") {
-      return (
-        <span className="ml-1 text-[9px] text-emerald-700 border border-emerald-300 rounded px-1"
-          title="Một vé vào được cả Phủ Chủ tịch lẫn nhà sàn — vé đã tính ở dòng cùng ngày, để 0 cho khỏi tính hai lần.">
-          đã gồm vé cụm Ba Đình
-        </span>
-      );
-    }
-    if (r.cum_ba_dinh === "vao_trong") {
-      return (
-        <span className="ml-1 text-[9px] text-sky-700 border border-sky-300 rounded px-1"
-          title="Vào Phủ Chủ tịch / nhà sàn Bác Hồ — một vé chung cho cả hai nơi.">
-          vé cụm Ba Đình
-        </span>
-      );
-    }
-    return null;
+    const nguonLaTau = !!t?.ten && !t.thieu_gia && !t.giu_gia_cu && !r.sua_tay;
+    // Luật món Việt Hà Nội đã đặt MAMMOM → chú thích luật là nguồn giá, như tàu.
+    const nguonLaMonVietHn = !!r.mon_viet_ha_noi && !r.mon_viet_ha_noi.thieu_gia && !r.sua_tay;
+    // Dòng để 0 CỐ Ý (không vào cụm Ba Đình, vé đã tính ở dòng cùng ngày, vé tàu
+    // đã gộp vào bữa ăn) — nhãn cam "cần điền giá" ở đây chỉ dụ người nhập gõ thêm tiền.
+    const la0CoY = r.don_gia <= 0
+      && (r.cum_ba_dinh === "ngoai_quan" || r.cum_ba_dinh === "da_gom" || !!r.ve_vinh_da_gom);
+    return nguonLaTau || nguonLaMonVietHn || la0CoY ? null : nhanNguonChinh(r);
   };
 
   const nhanNguonChinh = (r: ResolvedItem) => {
@@ -623,7 +564,8 @@ export function BaoGiaAiImport({
     if (included.length === 0) return;
     onApply(previewItems, ten, soNgay);
     // Học bộ nhớ khớp từ các dòng đã áp dụng (fire-and-forget) → lần sau tự khớp.
-    const toLearn = aliasesToLearn(included, user?.user_id);
+    // Bỏ dòng luật món Việt Hà Nội chưa ai sửa — cùng lý do với sổ tay bên dưới.
+    const toLearn = aliasesToLearn(included.filter((r) => !r.mon_viet_ha_noi || r.sua_tay), user?.user_id);
     if (toLearn.length) learn.mutate(toLearn);
 
     // Ghi vào SỔ TAY: cặp (tiếng Trung ↔ tiếng Việt ↔ giá) người nhập vừa chốt.
@@ -631,10 +573,14 @@ export function BaoGiaAiImport({
     // vẫn đúng, chỉ là lần sau chưa nhớ.
     // Dòng máy đoán chưa chắc KHÔNG được vào sổ tay: người nhập mới chỉ tick "đã
     // xem", chưa xác nhận là đúng — ghi vào là biến phỏng đoán thành giá chuẩn.
+    // Dòng luật món Việt Hà Nội cũng không (trừ khi người nhập sửa tay): luật tự
+    // ra lại mỗi lần, còn khoá sổ tay không mang thành phố — học vào là chuỗi
+    // "Home越式…" ở Hội An lần sau cũng ăn giá MAMMOM.
     const chuaChacSet = new Set(chuaChac);
     const deHoc = locDongDeHoc(
       included
-        .filter((r) => !chuaChacSet.has(r) && (LOAI_SO_TAY as readonly string[]).includes(r.loai))
+        .filter((r) => !chuaChacSet.has(r) && (!r.mon_viet_ha_noi || r.sua_tay)
+          && (LOAI_SO_TAY as readonly string[]).includes(r.loai))
         .map((r) => ({
           ten_zh: r.ten_zh,
           mo_ta: r.mo_ta,
@@ -1038,6 +984,8 @@ export function BaoGiaAiImport({
                                 <span className="flex items-center gap-1 px-1 mt-0.5">
                                   {nhanNguon(r)}
                                 </span>
+                                {/* Luật nào đã đổi giá / để 0 / chọn giúp dòng này — ghi rõ ngay dưới dịch vụ */}
+                                <ChuThichLuatList items={chuThichLuat(r)} className="px-1" />
                               </td>
                               <td className={`py-1 px-2 text-right text-slate-500 tabular-nums ${sup ? "line-through" : ""}`}>
                                 {r.don_gia > 0 ? (r.don_gia / xr).toFixed(2) : "—"}
@@ -1254,6 +1202,8 @@ export function BaoGiaAiImport({
               Mục nền cam = chưa có giá → điền tay. <span className="text-violet-700">“đã nhớ”</span> = tự điền từ bộ nhớ đã học (sửa lại được).
               <b> ⚠ có thể đã gồm…</b> = vé nghi là combo kèm ăn → bấm xác nhận, bữa ăn cùng ngày sẽ bị gạch (<b>⊂ đã gồm</b>) và không tính tiền;
               xác nhận cũng được ghi vào danh mục cảnh điểm nên báo giá sau tự trừ.
+              Dòng chữ nhỏ dưới tên dịch vụ = <b>luật</b> nào đã tự đổi giá, để 0 hay chọn giúp (tàu Hạ Long, cụm Ba Đình,
+              chọn set…) và vì sao; dòng <span className="text-amber-700">⚠ cam</span> = nên kiểm lại. Chú thích lưu kèm báo giá khi bấm Áp dụng.
               Bảng <b>Tính tiền</b> là giá sống theo đúng công thức bảng chi phí — sửa giá/FOC/xe/phụ thu là số nhảy ngay,
               bấm <b>Áp dụng</b> xong số không đổi. Xe, phụ thu, lợi nhuận, tỷ giá, cỡ đoàn sửa ở đây được lưu thẳng vào báo giá.
             </p>

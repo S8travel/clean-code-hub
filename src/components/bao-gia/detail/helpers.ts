@@ -14,6 +14,7 @@ import {
   cachTinhCua, resolveChiPhiKhac, type CachTinhChiPhiKhac, type ChiPhiKhacDong, type VungMau,
 } from "@/lib/bao-gia-chi-phi-khac";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
+import { chuThichHienThi, type ChuThichLuat } from "@/lib/bao-gia-chu-thich-luat";
 
 export const fmtVnd = (n: number | null | undefined) =>
   Math.round(Number(n) || 0).toLocaleString("vi-VN");
@@ -543,6 +544,8 @@ export interface CostingRow {
   foc_khach?: number;         // chính sách FOC nhà hàng (auto)
   foc_mien?: number;
   sl_override?: Record<string, number>; // SL nhập tay theo bậc (khoá = số khách)
+  /** Câu giải thích luật hiện dưới tên dịch vụ (đã kèm cảnh báo nếu giá bị sửa sau). */
+  chu_thich_luat?: ChuThichLuat[];
   editable: boolean;
   cells: CostingTierCell[];   // 1 cell / bậc số khách
 }
@@ -626,12 +629,14 @@ export function costingSheet(draft: BaoGiaRow): CostingSheet | null {
   const rowFromItem = (it: BaoGiaItem, idx: number): CostingRow => {
     const don_gia = it.don_gia ?? 0;
     const sl = it.so_luong ?? 1;
+    const chuThich = chuThichHienThi(it);
     return {
       itemIndex: idx, loai: it.loai, unit: unitFor(it.loai),
       ngay_so: it.ngay_so ?? 1, bua_an: it.bua_an, mo_ta: it.mo_ta, ten_zh: it.ten_zh,
       don_gia, don_gia_usd: xr > 0 ? don_gia / xr : 0, so_luong: sl,
       foc_manual: it.foc ?? null, foc_khach: it.foc_khach, foc_mien: it.foc_mien,
       sl_override: it.sl_override,
+      ...(chuThich.length ? { chu_thich_luat: chuThich } : {}),
       editable: true, cells: cellsFor(it, don_gia, sl),
     };
   };

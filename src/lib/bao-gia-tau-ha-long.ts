@@ -38,6 +38,10 @@ export const VE_VINH_HA_LONG = 330_000;
  *  "queen cruise" chứ không "queen": danh mục có nhà hàng "INDOCHINA QUEEN". */
 const TAU_CHUA_GOM_VE_VINH = ["sea octopus", "dolphin", "queen cruise"];
 
+/** Tên hiển thị của đúng các tàu trên — dùng trong câu chú thích cho người nhập.
+ *  Thêm/bớt tàu ở danh sách trên thì sửa luôn ở đây. */
+export const TAU_THU_VE_VINH_RIENG = "Sea Octopus, Dolphin, Queen";
+
 /** Tàu dùng khi lịch trình chỉ ghi "ăn trên tàu" mà không nêu tên tàu nào —
  *  đúng thứ hệ thống vẫn ngầm làm từ trước, nay nói rõ ra bằng một cảnh báo. */
 const TAU_MAC_DINH = "sea octopus";
@@ -195,12 +199,13 @@ export function giaBuaTheoTau(
   tau: TauHaLong,
   bua: "trua" | "toi" | null | undefined,
   ngayDate: string | null,
-): { don_gia: number; set_menu_id: number; set_ten: string; ve_vinh: number } | null {
+): { don_gia: number; gia_set: number; set_menu_id: number; set_ten: string; ve_vinh: number } | null {
   const setId = chonSetMenuTheoBua(tau.sets, { bua: bua ?? null, ngayDate });
   const set = setId != null ? tau.sets.find((s) => s.id === setId) : null;
   if (!set || (set.gia ?? 0) <= 0) return null;
   const ve_vinh = tau.chuaGomVeVinh ? VE_VINH_HA_LONG : 0;
-  return { don_gia: (set.gia ?? 0) + ve_vinh, set_menu_id: set.id, set_ten: set.ten, ve_vinh };
+  const gia_set = set.gia ?? 0;
+  return { don_gia: gia_set + ve_vinh, gia_set, set_menu_id: set.id, set_ten: set.ten, ve_vinh };
 }
 
 /** Ghi chú dán lên dòng vé du thuyền đã được gộp vào giá bữa ăn. */
@@ -272,6 +277,8 @@ export function apGiaTauHaLong(
           tau_ha_long: {
             ten: tau?.ten ?? null, ve_vinh: 0, thieu_gia: !gia && !giuGiaCu,
             ...(doanTau && tau ? { doan: true } : {}),
+            ...(giuGiaCu ? { giu_gia_cu: true } : {}),
+            ...(tau?.chuaGomVeVinh ? { thu_ve_rieng: true } : {}),
           },
         };
         continue;
@@ -288,7 +295,11 @@ export function apGiaTauHaLong(
         match_set_menu_id: gia.set_menu_id,
         match_label: `${dung!.ten} · ${gia.set_ten.trim()}${gia.ve_vinh ? " + vé vịnh" : ""}`,
         ...(dung!.foc_khach != null ? { foc_khach: dung!.foc_khach, foc_mien: dung!.foc_mien ?? 0 } : {}),
-        tau_ha_long: { ten: tau?.ten ?? dung!.ten, ve_vinh: gia.ve_vinh, ...(doanTau ? { doan: true } : {}) },
+        tau_ha_long: {
+          ten: tau?.ten ?? dung!.ten, ve_vinh: gia.ve_vinh,
+          gia_set: gia.gia_set, set_ten: gia.set_ten.trim(),
+          ...(doanTau ? { doan: true } : {}),
+        },
       };
       daApGia = true;
     }
@@ -308,6 +319,7 @@ export function apGiaTauHaLong(
           ? r.ghi_chu
           : [r.ghi_chu?.trim(), GHI_CHU_VE_DA_GOM].filter(Boolean).join(" · "),
         ve_vinh_da_gom: true,
+        ve_vinh_gop_tau: tau.ten,
       };
     }
   }

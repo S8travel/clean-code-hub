@@ -23,7 +23,7 @@ export function useBaoGiaResolveMaps(enabled = true) {
         externalSupabase.from("canh_diem").select("id, ten, gia_mac_dinh, bao_gom_bua_an, bao_gom_ghi_chu"),
         externalSupabase.from("nha_hang").select("id, ten, ten_zh, foc_khach, foc_mien"),
         externalSupabase.from("nha_hang_set_menu").select("id, ten_set, gia, nha_hang_id"),
-        externalSupabase.from("khach_san").select("id, ten, ten_zh"),
+        externalSupabase.from("khach_san").select("id, ten, ten_zh, dia_diem"),
         externalSupabase.from("khach_san_gia_phong").select("*"),
         externalSupabase.from("nha_xe_loai_xe").select("id, ten_xe, gia"),
       ]);
@@ -67,6 +67,7 @@ export function useBaoGiaResolveMaps(enabled = true) {
         khachSan.set(k.id as number, {
           ten: (k.ten as string) ?? "",
           ten_zh: (k.ten_zh as string) || null,
+          dia_diem: (k.dia_diem as string) || null,
         });
       }
 

@@ -56,8 +56,9 @@ export interface ResolveMaps {
     ten: string; ten_zh?: string | null;
     foc_khach: number | null; foc_mien: number | null;
   }>;
-  /** khach_san.id → { ten } (+ ten_zh nếu danh mục đã điền, 13/266) */
-  khachSan: Map<number, { ten: string; ten_zh?: string | null }>;
+  /** khach_san.id → { ten } (+ ten_zh nếu danh mục đã điền, 13/266).
+   *  dia_diem: thành phố đoàn ngủ đêm đó — luật món Việt Hà Nội cần nó. */
+  khachSan: Map<number, { ten: string; ten_zh?: string | null; dia_diem?: string | null }>;
   /** khach_san.id → các dòng giá theo giai đoạn (resolve theo ngày tour) */
   khachSanGia: Map<number, GiaPhongRow[]>;
   /** nha_xe_loai_xe.id → { ten, gia } */
@@ -140,14 +141,44 @@ export interface ResolvedItem {
     thieu_gia?: boolean;
     /** Giá lấy theo TÀU MẶC ĐỊNH vì không thấy tên tàu nào — cần người nhập soi lại. */
     doan?: boolean;
+    /** Giá set của tàu (chưa cộng vé vịnh) và tên set — để chú thích ghi ra phép cộng. */
+    gia_set?: number;
+    set_ten?: string;
+    /** Tàu thu vé vịnh RIÊNG ngoài giá set (chỉ ghi ở ca chưa áp được giá). */
+    thu_ve_rieng?: boolean;
+    /** Không thấy tên tàu mà dòng đã có giá → giữ giá đó, luật tàu KHÔNG áp. */
+    giu_gia_cu?: boolean;
   } | null;
   /** Dòng vé du thuyền đã được gộp vào giá bữa ăn cùng ngày → để 0 cho khỏi tính đúp. */
   ve_vinh_da_gom?: boolean;
+  /** Tên tàu mà bữa ăn đã gộp vé của dòng này (đi kèm `ve_vinh_da_gom`). */
+  ve_vinh_gop_tau?: string;
+  /** Set menu do LUẬT chọn hộ (nhà hàng nhiều set, AI bỏ trống ô set) + lý do chọn.
+   *  Chỉ còn đúng khi `match_set_menu_id` vẫn là `id` này và giá vẫn là `gia`. */
+  set_tu_chon?: { id: number; ten: string; ly_do: string; gia: number };
 
   /** Dòng thuộc cụm Ba Đình (xem lib/bao-gia-cum-ba-dinh.ts):
    *  'vao_trong' = có mua vé · 'ngoai_quan' = chỉ nhìn từ ngoài, 0 đồng ·
    *  'da_gom' = cùng ngày đã tính vé cụm rồi, một vé vào được cả hai nơi. */
   cum_ba_dinh?: "vao_trong" | "ngoai_quan" | "da_gom";
+
+  /** Luật món Việt ăn không giới hạn ở Hà Nội → MAMMOM (xem lib/bao-gia-mon-viet-ha-noi.ts). */
+  mon_viet_ha_noi?: {
+    /** Danh mục không còn set của luật (hoặc set chưa có giá) → giá để người nhập gõ. */
+    thieu_gia?: boolean;
+    nha_hang_id?: number;
+    nha_hang?: string;
+    set_ten?: string;
+    gia_set?: number;
+    /** Vì sao biết là Hà Nội: dòng ăn tự ghi, hay suy từ khách sạn đoàn ngủ. */
+    can_cu: "chu" | "khach_san";
+    khach_san?: string;
+    /** Ngày cuối không ngủ lại → lấy khách sạn đêm trước. */
+    dem_truoc?: boolean;
+    /** Giá + nguồn trước khi luật thay (máy khớp / sổ tay) — để chú thích nói ra. */
+    gia_cu?: number;
+    nguon_cu?: string;
+  };
 }
 
 /** Dòng TRỐNG do OP tự thêm trong màn review (AI đọc sót mục). Chưa có tên/giá
@@ -255,17 +286,21 @@ export const NGUONG_CHAC = 0.6;
  *  · dòng chưa khớp (`unmatched`) — đã hiện rõ "Chưa khớp", không giả vờ đúng
  *  · dòng ăn theo định mức USD (`confidence` 0 nhưng giá tính từ chính con số
  *    đối tác ghi trong lịch trình, không phải máy đoán)
+ *  · dòng luật món Việt Hà Nội đã đặt nhà hàng + set — giá do luật, không phải
+ *    lời đoán của máy, chú thích dưới dòng đã nói rõ
  *
  *  Tức là chỉ còn đúng loại nguy hiểm nhất: MÁY ĐOÁN, ĐOÁN KHÔNG CHẮC, MÀ VẪN RA
  *  MỘT CON SỐ TRÔNG NHƯ THẬT. */
 export function dongChuaChac<T extends {
   status: ResolveStatus; confidence: number;
   from_alias?: boolean; sua_tay?: boolean; match_table?: MatchTable | null;
+  mon_viet_ha_noi?: { thieu_gia?: boolean };
 }>(rows: T[]): T[] {
   return rows.filter((r) =>
     r.status !== "unmatched"
     && !r.from_alias
     && !r.sua_tay
+    && !(r.mon_viet_ha_noi && !r.mon_viet_ha_noi.thieu_gia)
     && r.match_table != null
     && r.confidence > 0
     && r.confidence < NGUONG_CHAC);
@@ -408,6 +443,24 @@ export function chonSetMenuTheoBua(
   return tot && tot.diem > 0 && !hoa ? tot.id : null;
 }
 
+const TEN_THU = ["Chủ nhật", "thứ Hai", "thứ Ba", "thứ Tư", "thứ Năm", "thứ Sáu", "thứ Bảy"];
+
+/** Vì sao `chonSetMenuTheoBua` chọn set này — câu hiện dưới dòng cho người nhập
+ *  biết con số từ đâu ra (buffet chênh cả trăm nghìn giữa trưa/tối, thường/cuối tuần). */
+export function lyDoChonSet(
+  tenSet: string,
+  ctx: { bua?: "trua" | "toi" | null; ngayDate?: string | null },
+): string {
+  const ly: string[] = [];
+  const bua = buaTrongTenSet(tenSet);
+  if (bua && ctx.bua === bua) ly.push(`đúng bữa ${bua === "trua" ? "trưa" : "tối"}`);
+  const ct = cuoiTuanTrongTenSet(tenSet);
+  const d = ctx.ngayDate ? new Date(`${ctx.ngayDate}T00:00:00`) : null;
+  const thu = d && !Number.isNaN(d.getTime()) ? d.getDay() : null;
+  if (ct != null && thu != null) ly.push(`hôm đó ${TEN_THU[thu]} — ${ct ? "cuối tuần" : "ngày thường"}`);
+  return ly.length ? ly.join(", ") : "set duy nhất hợp bữa / ngày";
+}
+
 /** Set menu theo từng nhà hàng, dựng 1 lần cho mỗi bộ maps (memo hoá). */
 const setTheoNhaHangCache = new WeakMap<ResolveMaps, Map<number, { id: number; ten: string; gia: number | null }[]>>();
 function setMenuCuaNhaHang(maps: ResolveMaps, nhaHangId: number) {
@@ -436,6 +489,8 @@ interface MatchRefResult {
   bao_gom_ghi_chu?: string | null;
   /** Set menu do LUẬT chọn hộ khi AI bỏ trống ô set (chỉ nhà hàng). */
   set_menu_id?: number | null;
+  /** Kèm lý do — chỉ khi nhà hàng có từ 2 set có giá (có chọn thật mới cần giải thích). */
+  set_tu_chon?: ResolvedItem["set_tu_chon"];
 }
 /** Hoàn cảnh của dòng đang giải — để chọn đúng set menu (bữa nào, ngày nào). */
 interface NguCanhDong { bua?: "trua" | "toi" | null; ngayDate?: string | null }
@@ -460,14 +515,23 @@ function resolveMatchRef(
     // Model gần như luôn để trống ô set → trước đây dòng ra 0₫ dù danh mục có
     // đủ giá. Chọn theo LUẬT (bữa + thứ trong tuần); không đủ căn cứ thì vẫn để
     // người nhập chọn, chứ không gán bừa.
-    const tuChon = chonSetMenuTheoBua(setMenuCuaNhaHang(maps, m.id), {
-      bua: ctx?.bua ?? null, ngayDate: ctx?.ngayDate ?? null,
-    });
+    const setsNh = setMenuCuaNhaHang(maps, m.id);
+    const nguCanh = { bua: ctx?.bua ?? null, ngayDate: ctx?.ngayDate ?? null };
+    const tuChon = chonSetMenuTheoBua(setsNh, nguCanh);
     const sTuChon = tuChon != null ? maps.setMenu.get(tuChon) : undefined;
-    if (sTuChon) {
+    if (tuChon != null && sTuChon) {
+      const nhieuSet = setsNh.filter((s) => (s.gia ?? 0) > 0).length > 1;
       return {
         ok: true, label: `${nh.ten} · ${sTuChon.ten}`, gia: sTuChon.gia,
         foc_khach: nh.foc_khach, foc_mien: nh.foc_mien, set_menu_id: tuChon,
+        ...(nhieuSet
+          ? {
+            set_tu_chon: {
+              id: tuChon, ten: sTuChon.ten.trim(), gia: sTuChon.gia ?? 0,
+              ly_do: lyDoChonSet(sTuChon.ten, nguCanh),
+            },
+          }
+          : {}),
       };
     }
     return { ok: true, label: nh.ten, gia: null, foc_khach: nh.foc_khach, foc_mien: nh.foc_mien }; // chưa chọn set → thiếu giá
@@ -541,6 +605,8 @@ function resolveOneCore(it: AiExtractItem, maps: ResolveMaps, tourDate?: string 
     match_table: m.table,
     match_id: m.id,
     match_set_menu_id: m.set_menu_id ?? r.set_menu_id ?? null,
+    // AI tự nêu set thì không phải luật chọn → không có gì để giải thích.
+    ...(m.set_menu_id == null && r.set_tu_chon ? { set_tu_chon: r.set_tu_chon } : {}),
   };
 }
 
@@ -561,6 +627,8 @@ function applyAlias(
   // (kể cả khi dòng mới KHÔNG phải combo → xoá cờ cũ, tránh ẩn nhầm bữa ăn).
   let comboPatch: Pick<ResolvedItem, "bao_gom_bua_an" | "bao_gom_nguon" | "bao_gom_ghi_chu"> = {};
   let setTuLuat: number | null = null;
+  // Alias đổi ref → lý do chọn set cũ (của ref AI) không còn đúng, lấy theo ref mới.
+  let setTuChon: ResolvedItem["set_tu_chon"];
   if (a.match_table && a.target_id) {
     const r = resolveMatchRef(
       { table: a.match_table, id: a.target_id, set_menu_id: a.set_menu_id, confidence: 1 },
@@ -571,6 +639,7 @@ function applyAlias(
       if (!a.ten_hien_thi) label = r.label;
       if (gia == null) gia = r.gia;
       setTuLuat = r.set_menu_id ?? null;
+      setTuChon = a.set_menu_id == null ? r.set_tu_chon : undefined;
       focPatch = withFoc(r);
       comboPatch = r.bao_gom_bua_an
         ? withCombo(r)
@@ -595,6 +664,8 @@ function applyAlias(
     match_table: a.match_table ?? res.match_table ?? null,
     match_id: a.target_id ?? res.match_id ?? null,
     match_set_menu_id: a.set_menu_id ?? setTuLuat ?? res.match_set_menu_id ?? null,
+    // Alias chỉ-giá: giá là của sổ tay, không còn là giá set luật chọn.
+    set_tu_chon: hasRef ? setTuChon : undefined,
     from_alias: true,
   };
 }
