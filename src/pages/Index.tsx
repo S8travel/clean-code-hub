@@ -30,7 +30,6 @@ import {
 import { demDnttChanHuyDoan } from "@/lib/huy-doan-guards";
 import {
   useDoanList,
-  useDoanRealtime,
   useCreateDoan,
   useUpdateDoan,
   useDeleteDoan,
@@ -98,7 +97,7 @@ export default function Index() {
   );
   const groups = groupsRaw as unknown as DoanRow[] | undefined;
   const { data: qtPaidSet } = useDoanQuyetToanPaidSet();
-  useDoanRealtime();
+  // Realtime danh sách đoàn: useDoanRealtime gắn một lần ở ProtectedLayout cho cả app.
   const createDoan = useCreateDoan();
   const cloneDoan = useCloneDoan();
   const uploadTaiLieu = useUploadDoanTaiLieu();

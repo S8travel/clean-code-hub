@@ -1,7 +1,10 @@
 import { useEffect } from "react";
 import { externalSupabase } from "@/lib/supabase-external";
 import { gomLaiMotLan } from "@/lib/gom-invalidate";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import {
+  vaDanhSachDoan, vaMotDoan, dieuKienDanhSachDoan, type SuKienDoan, type KetQuaVa,
+} from "@/lib/doan-realtime-va";
+import { useQuery, useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/hooks/use-auth";
 import { buildAuditLogger } from "@/hooks/use-activity-log";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
@@ -334,10 +337,27 @@ export function useCurrentUserProfile() {
   });
 }
 
+// Câu select đoàn (cột + object nhúng) dùng chung cho danh sách và trang chi tiết.
+// Thêm object nhúng mới → thêm cột khoá ngoại của nó vào COT_CO_NHUNG ở
+// lib/doan-realtime-va.ts, kẻo realtime vá cột mà giữ object nhúng cũ.
+const DOAN_SELECT = `
+          *,
+          agents:agent_id(id, ten),
+          agent_huy:agent_huy_id(id, ten),
+          dia_diem:dia_diem_id(ten),
+          huong_dan_vien:huong_dan_vien!huong_dan_vien_id(id, ten, so_dien_thoai),
+          huong_dan_vien_2:huong_dan_vien!huong_dan_vien_id_2(id, ten, so_dien_thoai),
+          xe:nha_xe_loai_xe!xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
+          xe_2:nha_xe_loai_xe!xe_id_2(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
+          van_phong:van_phong_id(id, ten)
+        `;
+
 // Doan list — phanLoaiTour=null → no filter (admin/giám đốc); array → filter by thi_truong.
 // vanPhongIds=null/undefined → no filter (cross-VP); mảng → chỉ doan có van_phong_id ∈ mảng.
 // SCOPE filter cả 2 áp dụng cùng lúc (caller pass từ useDoanScope).
 // LƯU Ý: filter VP ở đây CHỈ để UX (list gọn); enforce thật là RLS tường cứng (DB).
+// Bộ lọc ở đây phải khớp dieuKienDanhSachDoan (lib/doan-realtime-va.ts) — realtime dùng
+// nó để biết đoàn vừa đổi có thuộc danh sách này không.
 export function useDoanList(
   phanLoaiTour?: string[] | null,
   vanPhongIds?: number[] | null,
@@ -350,17 +370,7 @@ export function useDoanList(
     queryFn: async () => {
       let query = externalSupabase
         .from("doan")
-        .select(`
-          *,
-          agents:agent_id(id, ten),
-          agent_huy:agent_huy_id(id, ten),
-          dia_diem:dia_diem_id(ten),
-          huong_dan_vien:huong_dan_vien!huong_dan_vien_id(id, ten, so_dien_thoai),
-          huong_dan_vien_2:huong_dan_vien!huong_dan_vien_id_2(id, ten, so_dien_thoai),
-          xe:nha_xe_loai_xe!xe_id(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
-          xe_2:nha_xe_loai_xe!xe_id_2(id, ten_xe, so_cho, nha_xe:nha_xe_id(id, ten, email, so_dien_thoai, nha_cung_cap_id, tai_khoan_thanh_toan)),
-          van_phong:van_phong_id(id, ten)
-        `);
+        .select(DOAN_SELECT);
       if (phanLoaiTour && phanLoaiTour.length > 0) {
         // Fail-open: đoàn CHƯA phân thị trường (thi_truong NULL) vẫn hiện cho mọi OP —
         // tránh "biến mất" khi đoàn tạo thiếu phân loại (vd giám đốc tạo, hoặc clone từ nguồn NULL).
@@ -379,48 +389,102 @@ export function useDoanList(
   });
 }
 
-// Subscribe to realtime changes on doan table
-export function useDoanRealtime() {
-  const qc = useQueryClient();
-
-  useQuery({
-    queryKey: ["doan_realtime_sub"],
-    queryFn: () => {
-      // GOM sự kiện: một lệnh UPDATE chạm hàng trăm dòng doan sinh hàng trăm sự
-      // kiện, mỗi cái invalidate danh sách đoàn — câu query nặng nhất hệ thống.
-      // Không gom thì vài trăm request dội trong vài giây, cạn pool PostgREST và
-      // auth đói theo (sự cố 18/08/2026: OP không đăng nhập được).
-      const napLai = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan"] }));
-      const channel = externalSupabase
-        .channel("doan_changes")
-        .on("postgres_changes", { event: "*", schema: "public", table: "doan" }, napLai)
-        .subscribe();
-      return channel;
+// MỘT đoàn cho trang chi tiết. Trước 02/10/2026 trang chi tiết tải CẢ danh sách đoàn
+// (~1,5 MB) chỉ để `.find()` ra một dòng — và tải lại mỗi khi bất kỳ đoàn nào đổi.
+// Khoá nằm dưới tiền tố ["doan"] để mọi chỗ đang invalidate ["doan"] (DoanDrawer, đổi số
+// khách, đổi HDV…) vẫn làm mới trang chi tiết như trước.
+export function useDoanChiTiet(doanId: number | null | undefined) {
+  const hopLe = doanId != null && Number.isFinite(doanId) && doanId > 0;
+  return useQuery({
+    queryKey: ["doan", "chi_tiet", doanId],
+    enabled: hopLe,
+    staleTime: 30_000,
+    queryFn: async () => {
+      const { data, error } = await externalSupabase
+        .from("doan")
+        .select(DOAN_SELECT)
+        .eq("id", doanId!)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
     },
-    staleTime: Infinity,
-    refetchOnWindowFocus: false,
   });
 }
 
-// Realtime cho TRANG CHI TIẾT đoàn: nghe doan + doan_ngay + doan_ngay_item
-// của 1 đoàn từ máy khác → invalidate query tương ứng. An toàn vì local
-// state điều tour có chốt hasPendingChangesRef (chỉ merge lại khi không
-// đang nhập dở) — khác Chi phí KS/NH (sticky sessionStorage).
+/** Áp loạt sự kiện realtime `doan` vào MỌI cache đoàn đang có (danh sách các kiểu lọc +
+ *  trang chi tiết). Cache nào tự vá được thì vá tại chỗ; cache nào không (đoàn mới, đổi
+ *  HDV/xe/agent…) thì tải lại RIÊNG cache đó — xem lib/doan-realtime-va.ts. */
+function apSuKienDoanVaoCache(qc: QueryClient, cacSuKien: SuKienDoan[]) {
+  for (const [key, data] of qc.getQueriesData<unknown>({ queryKey: ["doan"] })) {
+    if (data == null) continue;
+    let kq: KetQuaVa<unknown>;
+    if (Array.isArray(data)) {
+      // Khoá useDoanList: ["doan", phanLoaiTour, vanPhongIds, agentIds]
+      const [, phanLoai, vanPhong, agent] = key;
+      kq = vaDanhSachDoan(data, cacSuKien, dieuKienDanhSachDoan(
+        Array.isArray(phanLoai) ? (phanLoai as string[]) : null,
+        Array.isArray(vanPhong) ? (vanPhong as number[]) : null,
+        Array.isArray(agent) ? (agent as number[]) : null,
+      ));
+    } else if (typeof data === "object" && "id" in data) {
+      kq = vaMotDoan(data as Record<string, unknown>, cacSuKien);
+    } else {
+      continue;
+    }
+    if (kq.canTaiLai) qc.invalidateQueries({ queryKey: key, exact: true });
+    else if (kq.data !== data) qc.setQueryData(key, kq.data);
+  }
+}
+
+// Realtime bảng `doan` cho toàn app — gắn MỘT lần ở ProtectedLayout.
+//
+// Trước 02/10/2026 mỗi sự kiện invalidate cả danh sách → mọi máy tải lại ~1,5 MB mỗi khi
+// bất kỳ ai sửa bất kỳ đoàn nào. Nay vá dòng tại chỗ từ payload, chỉ tải lại khi buộc phải.
+// Vẫn GOM sự kiện: một lệnh UPDATE chạm hàng trăm dòng doan sinh hàng trăm sự kiện (sự cố
+// 18/08/2026: vài trăm request dội trong vài giây, cạn pool PostgREST, OP không đăng nhập
+// được) → gom lại vá một lần, và nếu phải tải lại thì cũng chỉ một lần.
+//
+// Trước đây hook này trả channel qua useQuery nên KHÔNG bao giờ huỷ đăng ký; nay là
+// useEffect có dọn kênh.
+export function useDoanRealtime() {
+  const qc = useQueryClient();
+  useEffect(() => {
+    let hang: SuKienDoan[] = [];
+    const xuLy = gomLaiMotLan(() => {
+      const lo = hang;
+      hang = [];
+      apSuKienDoanVaoCache(qc, lo);
+    });
+    const channel = externalSupabase
+      .channel("doan_changes")
+      .on("postgres_changes", { event: "*", schema: "public", table: "doan" }, (payload) => {
+        hang.push(payload as unknown as SuKienDoan);
+        xuLy();
+      })
+      .subscribe();
+    return () => {
+      externalSupabase.removeChannel(channel);
+    };
+  }, [qc]);
+}
+
+// Realtime cho TRANG CHI TIẾT đoàn: nghe doan_ngay + doan_ngay_item của 1 đoàn từ máy
+// khác → invalidate query tương ứng. An toàn vì local state điều tour có chốt
+// hasPendingChangesRef (chỉ merge lại khi không đang nhập dở) — khác Chi phí KS/NH
+// (sticky sessionStorage).
+//
+// Bảng `doan` KHÔNG nghe ở đây nữa: useDoanRealtime (ProtectedLayout, luôn bật) đã vá
+// cả cache chi tiết lẫn danh sách. Nghe thêm ở đây trước đây = invalidate cả `["doan"]`
+// (mọi danh sách) mỗi lần đoàn này đổi.
 export function useDoanDetailRealtime(doanId: number | null | undefined) {
   const qc = useQueryClient();
   useEffect(() => {
     if (!doanId || Number.isNaN(doanId)) return;
-    // Lưu lịch trình chạm hàng chục dòng doan_ngay_item một lúc → gom y như trên.
-    const napDoan = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan"] }));
+    // Lưu lịch trình chạm hàng chục dòng doan_ngay_item một lúc → gom lại.
     const napNgay = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan_ngay", doanId] }));
     const napItem = gomLaiMotLan(() => qc.invalidateQueries({ queryKey: ["doan_ngay_item", doanId] }));
     const channel = externalSupabase
       .channel(`doan_detail_${doanId}`)
-      .on(
-        "postgres_changes",
-        { event: "*", schema: "public", table: "doan", filter: `id=eq.${doanId}` },
-        napDoan,
-      )
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "doan_ngay", filter: `doan_id=eq.${doanId}` },

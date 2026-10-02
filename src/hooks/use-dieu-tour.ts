@@ -14,7 +14,8 @@ import {
 import { resolveCanhDiemChiPhiTarget } from "@/lib/canh-diem-cascade";
 import { canGuiBookingDV } from "@/lib/booking-dv-filter";
 import { calcSoKhachThucTe } from "@/lib/foc-calc";
-import type { TablesInsert, TablesUpdate } from "@/lib/database.types";
+import { canGhi } from "@/lib/can-ghi";
+import type { Tables, TablesInsert, TablesUpdate } from "@/lib/database.types";
 
 // ── Lookup types ──
 export interface CanhDiemItem {
@@ -521,6 +522,8 @@ export function useSaveDieuTour() {
       const counters = {
         thucTeClearCount: 0, nhOrphanDeleted: 0, nhOrphanKept: 0,
         nhBookingLacDeleted: 0, nhBookingLacKept: 0,
+        // Lần lưu này có ghi bảng `doan` không — onSuccess chỉ tải lại danh sách đoàn khi có.
+        doanUpdated: false,
       };
 
       let defaultDoanNhomId: number | null = doanNhomId ?? null;
@@ -529,6 +532,10 @@ export function useSaveDieuTour() {
       // CỐ Ý để NGOÀI khối try bên dưới: đoàn bị khoá thì UI đã disable sửa, `days` local
       // (nếu có) là rác → revert về DB mới đúng. Ném Error thường → onError refetch.
       lockGuard(doanId);
+
+      // Mọi ngày của ĐOÀN (mọi nhóm) — đọc một lần ở backstop 1, dùng lại ở bước gộp số
+      // khách cảnh điểm cross-nhóm thay vì đọc lại từng ngày (xem lib/can-ghi.ts về số lượt).
+      let ngayCuaDoan: Array<{ id: number; ngay_so: number }> = [];
 
       // ══ GIAI ĐOẠN 1 — CHỈ ĐỌC & KIỂM TRA. Không một byte nào được ghi trong khối này. ══
       //
@@ -569,9 +576,10 @@ export function useSaveDieuTour() {
       {
         const { data: allDbDays, error: eDays } = await externalSupabase
           .from("doan_ngay")
-          .select("ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id, doan_nhom_id")
+          .select("id, ngay_so, an_trua_nha_hang_id, an_toi_nha_hang_id, doan_nhom_id")
           .eq("doan_id", doanId);
         if (eDays) throw eDays; // fail-safe: không verify được thì KHÔNG cho lưu
+        ngayCuaDoan = (allDbDays ?? []).map((d) => ({ id: d.id, ngay_so: d.ngay_so }));
         const oldOccupied = buildOccupiedMealSlots(allDbDays ?? []);
         const otherNhomDays = (allDbDays ?? []).filter((d) => d.doan_nhom_id !== defaultDoanNhomId);
         const newOccupied = buildOccupiedMealSlots([
@@ -782,44 +790,86 @@ export function useSaveDieuTour() {
         (doanFields.so_khach_em1 ?? 0) +
         (doanFields.so_khach_em2 ?? 0) +
         (doanFields.so_khach_tl ?? 0);
-      // Fetch old doan + existing doan_ngay/items để diff log (chỉ log UPDATE)
+      // Fetch old doan + existing doan_ngay/items để diff log (chỉ log UPDATE).
+      // Đọc ĐỦ mọi cột sắp ghi: canGhi so từng cột, thiếu cột nào là coi như khác.
       const { data: oldDoan } = await externalSupabase
         .from("doan")
-        .select("so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, bang_don, truong_doan, chuyen_bay_don, chuyen_bay_tien, co_tinh_suat_tl_nha_hang, chu_thich_khach, tang_pham, ghi_chu_dieu_tour, thu_tip")
+        .select("so_khach, so_khach_lon, so_khach_em1, so_khach_em2, so_khach_tl, bang_don, shopping, truong_doan, chuyen_bay_don, chuyen_bay_tien, co_tinh_suat_tl_nha_hang, chu_thich_khach, tang_pham, ghi_chu_dieu_tour, thu_tip, tip_rate, tip_so_ngay_override, tip_so_khach_override, tip_lump_sum")
         .eq("id", doanId)
         .maybeSingle();
 
-      await externalSupabase
-        .from("doan")
-        .update({ ...doanFields, so_khach })
-        .eq("id", doanId);
+      // CHỈ ghi khi có trường đổi thật. Ghi y nguyên vẫn bắn realtime `doan` tới mọi máy
+      // → cả công ty tải lại danh sách đoàn mỗi 1,5 giây OP gõ (xem lib/can-ghi.ts).
+      const doanMoi = { ...doanFields, so_khach };
+      if (canGhi(oldDoan, doanMoi)) {
+        await externalSupabase
+          .from("doan")
+          .update(doanMoi)
+          .eq("id", doanId);
+        counters.doanUpdated = true;
+      }
 
       // defaultDoanNhomId đã resolve + guard non-null ở đầu mutationFn (trước backstop).
+      // Đọc ĐỦ mọi cột của ngayPayload bên dưới: dùng cho diff log VÀ để bỏ lệnh ghi ngày
+      // không đổi gì (canGhi — thiếu cột là coi như khác, vẫn ghi).
       const { data: existingNgayRows } = await externalSupabase
         .from("doan_ngay")
-        .select("id, ngay_so, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, thanh_pho")
+        .select("id, doan_id, doan_nhom_id, ngay_so, ngay_date, thu, khach_san_id, ks_ma_code, ks_loai_phong, an_trua_nha_hang_id, an_toi_nha_hang_id, an_trua_set_menu_id, an_toi_set_menu_id, an_trua_ghi_chu, an_toi_ghi_chu, thanh_pho")
         .eq("doan_id", doanId)
         .eq("doan_nhom_id", defaultDoanNhomId);
       type ExistingNgayRow = NonNullable<typeof existingNgayRows>[number];
       const existingByNgaySo = new Map<number, ExistingNgayRow>(
         (existingNgayRows ?? []).map((r) => [r.ngay_so, r]),
       );
+      const existingNgayById = new Map<number, ExistingNgayRow>(
+        (existingNgayRows ?? []).map((r) => [r.id, r]),
+      );
 
+      // Cảnh điểm hiện có của MỌI ngày nhóm này — đọc một lần, thay cho 2 lượt đọc mỗi
+      // ngày trong vòng lặp (tìm dòng cần xoá + dòng đang có). Không ai khác ghi các dòng
+      // này trong lượt lưu (DoanDetail chỉ chạy một lượt lưu một lúc — lib/hang-doi-luu.ts),
+      // và vòng lặp tự trừ dòng nó vừa xoá. Ngày vừa INSERT thì chưa có cảnh điểm nào.
+      type ItemDb = Pick<
+        Tables<"doan_ngay_item">,
+        "id" | "doan_ngay_id" | "canh_diem_id" | "don_gia" | "co_phi" | "so_luong" | "nguoi_thanh_toan" | "thu_tu" | "ghi_chu"
+      >;
       const existingDoanNgayIds = (existingNgayRows ?? []).map((r) => r.id).filter(Boolean);
       const existingItemsByNgayId = new Map<number, number[]>();
+      const itemsTheoNgay = new Map<number, ItemDb[]>();
       if (existingDoanNgayIds.length > 0) {
-        const { data: existingItems } = await externalSupabase
+        const { data: existingItems, error: eItemsAll } = await externalSupabase
           .from("doan_ngay_item")
-          .select("doan_ngay_id, canh_diem_id")
+          .select("id, doan_ngay_id, canh_diem_id, don_gia, co_phi, so_luong, nguoi_thanh_toan, thu_tu, ghi_chu")
           .in("doan_ngay_id", existingDoanNgayIds);
+        // Bảng này quyết định dòng nào bị XOÁ → đọc hỏng thì dừng, không đoán.
+        if (eItemsAll) throw eItemsAll;
         for (const it of existingItems ?? []) {
-          if (it.doan_ngay_id == null || it.canh_diem_id == null) continue;
+          if (it.doan_ngay_id == null) continue;
+          if (!itemsTheoNgay.has(it.doan_ngay_id)) itemsTheoNgay.set(it.doan_ngay_id, []);
+          itemsTheoNgay.get(it.doan_ngay_id)!.push(it);
+          if (it.canh_diem_id == null) continue;
           if (!existingItemsByNgayId.has(it.doan_ngay_id)) {
             existingItemsByNgayId.set(it.doan_ngay_id, []);
           }
           existingItemsByNgayId.get(it.doan_ngay_id)!.push(it.canh_diem_id);
         }
       }
+
+      // Dòng chi phí nhà hàng của đoàn — đọc một lần, thay cho 1 lượt đọc mỗi bữa trong
+      // vòng lặp. Tra theo (ngay_so, mo_ta) như câu cũ; INSERT trong lượt này được thêm
+      // vào mảng để lần tra sau (nếu trùng khoá) thấy y như đọc lại DB.
+      const { data: nhChiPhiRows, error: eNhCpAll } = await externalSupabase
+        .from("doan_chi_phi")
+        .select("id, doan_id, ngay_so, loai, danh_muc, mo_ta, nha_cung_cap_id")
+        .eq("doan_id", doanId)
+        .eq("danh_muc", "nha_hang");
+      if (eNhCpAll) throw eNhCpAll;
+      const nhChiPhiHienCo = [...(nhChiPhiRows ?? [])];
+
+      // Bảng ngày đọc ở backstop 1 còn dùng được cho bước gộp cross-nhóm khi lượt lưu
+      // KHÔNG dời ngày nào sang ngay_so khác (ca thường gặp). Có dời → đọc DB như cũ.
+      const ngaySoCu = new Map(ngayCuaDoan.map((r) => [r.id, r.ngay_so]));
+      const dungNgayDocSan = days.every((d) => d.id == null || ngaySoCu.get(d.id) === d.ngay_so);
 
       const ksNameMap = new Map(khachSanList.map((k) => [k.id, k.ten]));
       const nhNameMap = new Map(nhaHangList.map((n) => [n.id, n.ten]));
@@ -899,14 +949,20 @@ export function useSaveDieuTour() {
         };
 
         let doanNgayId = day.id;
+        // Ngày vừa INSERT trong lượt này → chắc chắn chưa có cảnh điểm nào.
+        let vuaTaoNgay = false;
 
         // Ghi doan_ngay — 3 đường dưới đây trước đây KHÔNG kiểm `error`, nên một
         // lần ghi hỏng là im lặng: hàm lưu vẫn báo thành công, màn hình vẫn hiện
         // thay đổi, mở lại mới thấy mất. Đúng triệu chứng OP báo 24/09/2026.
         if (doanNgayId) {
-          const { error: eUpd } = await externalSupabase
-            .from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
-          if (eUpd) throw eUpd;
+          // Ngày y nguyên (thường gặp: OP sửa ngày khác) → bỏ lệnh ghi. Không có trong bảng
+          // vừa đọc (ngày của nhóm khác / đọc hỏng) → ghi như trước.
+          if (canGhi(existingNgayById.get(doanNgayId), ngayPayload)) {
+            const { error: eUpd } = await externalSupabase
+              .from("doan_ngay").update(ngayPayload).eq("id", doanNgayId);
+            if (eUpd) throw eUpd;
+          }
         } else {
           // Tìm existing row PER NHÓM — không filter doan_nhom_id sẽ trúng nhóm khác
           // và overwrite dữ liệu nhóm 1 khi user save nhóm 2.
@@ -929,6 +985,7 @@ export function useSaveDieuTour() {
               .from("doan_ngay").insert(ngayPayload).select("id").single();
             if (eIns) throw eIns;
             if (data) doanNgayId = data.id;
+            vuaTaoNgay = true;
           }
         }
 
@@ -962,14 +1019,30 @@ export function useSaveDieuTour() {
         const validItems = day.items.filter((it) => it.canh_diem_id && it.canh_diem_id > 0);
         const selectedCanhDiemIds = validItems.map((it) => it.canh_diem_id);
 
-        // Find items to delete
-        const { data: itemsToDelete } = await externalSupabase
-          .from("doan_ngay_item")
-          .select("id")
-          .eq("doan_ngay_id", doanNgayId)
-          .not("canh_diem_id", "in", selectedCanhDiemIds.length > 0 ? `(${selectedCanhDiemIds.join(",")})` : "(0)");
+        // Cảnh điểm đang có của ngày này: lấy từ bảng đã đọc sẵn trước vòng lặp. Ngày không
+        // nằm trong bảng đó (đọc ngày hỏng / ngoài nhóm) → đọc DB như cũ, không đoán.
+        let itemsCuaNgay: ItemDb[];
+        if (vuaTaoNgay) {
+          itemsCuaNgay = [];
+        } else if (existingNgayById.has(doanNgayId)) {
+          itemsCuaNgay = itemsTheoNgay.get(doanNgayId) ?? [];
+        } else {
+          const { data: docLai, error: eDocLai } = await externalSupabase
+            .from("doan_ngay_item")
+            .select("id, doan_ngay_id, canh_diem_id, don_gia, co_phi, so_luong, nguoi_thanh_toan, thu_tu, ghi_chu")
+            .eq("doan_ngay_id", doanNgayId);
+          if (eDocLai) throw eDocLai;
+          itemsCuaNgay = docLai ?? [];
+        }
 
-        if (itemsToDelete && itemsToDelete.length > 0) {
+        // Find items to delete — y hệt câu cũ `.not("canh_diem_id", "in", (…))`: dòng
+        // canh_diem_id NULL KHÔNG bị chọn (NULL NOT IN (…) cho NULL, không phải true).
+        const giuLai = selectedCanhDiemIds.length > 0 ? selectedCanhDiemIds : [0];
+        const itemsToDelete = itemsCuaNgay.filter(
+          (it) => it.canh_diem_id != null && !giuLai.includes(it.canh_diem_id),
+        );
+
+        if (itemsToDelete.length > 0) {
           const idsToDelete = itemsToDelete.map((it) => it.id);
           // Delete referencing doan_chi_phi rows first — pre-check DNTT
           for (const itemId of idsToDelete) {
@@ -983,13 +1056,11 @@ export function useSaveDieuTour() {
           if (eDelItem) throw eDelItem;
         }
 
-        if (selectedCanhDiemIds.length === 0 && (!itemsToDelete || itemsToDelete.length === 0)) {
+        if (selectedCanhDiemIds.length === 0 && itemsToDelete.length === 0) {
           // Also handle case where all items removed but none found above
-          const { data: remainingItems } = await externalSupabase
-            .from("doan_ngay_item")
-            .select("id")
-            .eq("doan_ngay_id", doanNgayId);
-          if (remainingItems && remainingItems.length > 0) {
+          // (dòng canh_diem_id NULL / 0 mà câu NOT IN ở trên không bắt được).
+          const remainingItems = itemsCuaNgay;
+          if (remainingItems.length > 0) {
             for (const ri of remainingItems) {
               await deleteChiPhiByItemIdSafe(ri.id);
             }
@@ -1012,13 +1083,11 @@ export function useSaveDieuTour() {
           // Snapshot rule: don_gia (giá cảnh điểm) chỉ snap KHI INSERT lần đầu;
           // master canh_diem.gia_mac_dinh đổi sau KHÔNG được overwrite.
           // → tách insert (snap master) vs update (giữ snapshot cũ).
-          const { data: existingRows } = await externalSupabase
-            .from("doan_ngay_item")
-            .select("id, canh_diem_id, don_gia, co_phi, so_luong, nguoi_thanh_toan")
-            .eq("doan_ngay_id", doanNgayId);
-          type ExistingItemRow = NonNullable<typeof existingRows>[number];
-          const existingMap = new Map<number | null, ExistingItemRow>(
-            (existingRows || []).map((r) => [r.canh_diem_id, r]),
+          // Dòng đang có SAU khi xoá ở trên (thay cho lượt đọc lại DB).
+          const daXoa = new Set(itemsToDelete.map((it) => it.id));
+          const existingRows = itemsCuaNgay.filter((it) => !daXoa.has(it.id));
+          const existingMap = new Map<number | null, ItemDb>(
+            existingRows.map((r) => [r.canh_diem_id, r]),
           );
 
           for (let idx = 0; idx < validItems.length; idx++) {
@@ -1032,7 +1101,17 @@ export function useSaveDieuTour() {
               nguoi_thanh_toan: cd?.nguoi_thanh_toan ?? null,
               ghi_chu: it.ghi_chu || null,
             };
-            if (existing) {
+            if (existing && !canGhi(existing, commonFields)) {
+              // Y nguyên → bỏ lệnh ghi; dòng đang có chính là thứ lệnh UPDATE sẽ trả về.
+              insertedItems.push({
+                id: existing.id,
+                canh_diem_id: existing.canh_diem_id,
+                co_phi: existing.co_phi,
+                don_gia: existing.don_gia,
+                so_luong: existing.so_luong,
+                nguoi_thanh_toan: existing.nguoi_thanh_toan,
+              });
+            } else if (existing) {
               // UPDATE: KHÔNG đụng don_gia (snapshot lock per tour)
               const { data } = await externalSupabase
                 .from("doan_ngay_item")
@@ -1085,13 +1164,24 @@ export function useSaveDieuTour() {
         // Approach A merge cross-nhóm: dedupe chi phí by (doan_id, danh_muc, ngay_so, mo_ta).
         // 2 nhóm cùng cảnh điểm cùng ngày → 1 chi phí row, so_luong = SUM khách cả 2 nhóm.
         if (insertedItems.length > 0) {
-          // Pre-fetch all doan_ngay rows của đoàn ngày này (để aggregate so_luong cross-nhóm)
-          const { data: allNgayThisDay } = await externalSupabase
-            .from("doan_ngay")
-            .select("id")
-            .eq("doan_id", doanId)
-            .eq("ngay_so", day.ngay_so);
-          const allNgayIdsThisDay = (allNgayThisDay || []).map((r) => r.id);
+          // Mọi doan_ngay của đoàn có cùng ngay_so (để aggregate so_luong cross-nhóm).
+          // Thường lấy từ bảng đọc ở backstop 1 + chính ngày này (có thể vừa INSERT).
+          // Lượt lưu có đổi ngay_so của ngày cũ → thứ tự ghi trong vòng lặp quyết định ai
+          // đang ở ngay_so nào → đọc DB như cũ cho chắc.
+          let allNgayIdsThisDay: number[];
+          if (dungNgayDocSan) {
+            allNgayIdsThisDay = [...new Set([
+              ...ngayCuaDoan.filter((r) => r.ngay_so === day.ngay_so).map((r) => r.id),
+              doanNgayId,
+            ])];
+          } else {
+            const { data: allNgayThisDay } = await externalSupabase
+              .from("doan_ngay")
+              .select("id")
+              .eq("doan_id", doanId)
+              .eq("ngay_so", day.ngay_so);
+            allNgayIdsThisDay = (allNgayThisDay || []).map((r) => r.id);
+          }
 
           for (const item of insertedItems) {
             if (!item.co_phi) continue;
@@ -1145,8 +1235,9 @@ export function useSaveDieuTour() {
             // Dedupe cross-nhóm: tìm existing theo (doan_id, danh_muc, ngay_so, mo_ta)
             // thay vì ref_doan_ngay_item_id (vì mỗi nhóm có item.id riêng).
             // Đọc foc snapshot để update tính lại tien đúng (snapshot LOCK per-tour).
+            // Kèm mọi cột của lệnh UPDATE bên dưới để bỏ được lệnh ghi y nguyên (canGhi).
             const cdCpCols =
-              "id, so_luong, don_gia, is_overridden, foc_khach_snapshot, foc_mien_snapshot";
+              "id, doan_id, ngay_so, loai, danh_muc, mo_ta, nha_cung_cap_id, so_luong, don_gia, tien_cong_ty, tien_hdv, is_overridden, foc_khach_snapshot, foc_mien_snapshot";
             const { data: existingByMoTa } = await externalSupabase
               .from("doan_chi_phi")
               .select(cdCpCols)
@@ -1178,8 +1269,10 @@ export function useSaveDieuTour() {
                 const masterOnly = { ...masterFields };
                 delete (masterOnly as Record<string, unknown>).ref_doan_ngay_item_id;
                 delete (masterOnly as Record<string, unknown>).ref_doan_ngay_id;
-                await externalSupabase.from("doan_chi_phi")
-                  .update(masterOnly).eq("id", existing.id);
+                if (canGhi(existing, masterOnly)) {
+                  await externalSupabase.from("doan_chi_phi")
+                    .update(masterOnly).eq("id", existing.id);
+                }
               } else {
                 const soLuongChanged = Number(existing.so_luong) !== newSoLuong
                                     || Number(existing.don_gia)  !== newDonGia;
@@ -1196,8 +1289,11 @@ export function useSaveDieuTour() {
                   updatePayload.thanh_tien_thuc_te = null;
                   counters.thucTeClearCount++;
                 }
-                await externalSupabase.from("doan_chi_phi")
-                  .update(updatePayload).eq("id", existing.id);
+                // soLuongChanged ⇒ payload chắc chắn khác → luôn ghi (kèm xoá thực tế).
+                if (canGhi(existing, updatePayload)) {
+                  await externalSupabase.from("doan_chi_phi")
+                    .update(updatePayload).eq("id", existing.id);
+                }
               }
             } else {
               // INSERT: snap FOC từ master canh_diem (lock per-tour) + tính tien theo FOC.
@@ -1261,15 +1357,10 @@ export function useSaveDieuTour() {
               // Approach A merge cross-nhóm: dedupe chi phí by (doan_id, danh_muc, ngay_so, mo_ta).
               // Nếu 2 nhóm cùng NH-bữa-ngày → 1 chi phí row (ref_doan_ngay_id = nhóm save đầu).
               // 2 nhóm khác NH cùng bữa-ngày → 2 chi phí rows (mo_ta khác nhau).
-              const { data: existingRows } = await externalSupabase
-                .from("doan_chi_phi")
-                .select("id")
-                .eq("doan_id", doanId)
-                .eq("danh_muc", "nha_hang")
-                .eq("ngay_so", day.ngay_so)
-                .eq("mo_ta", moTaMeal)
-                .limit(1);
-              const existing = existingRows?.[0];
+              // Tra trong bảng đọc sẵn trước vòng lặp (thay câu `.eq(ngay_so).eq(mo_ta).limit(1)`).
+              const existing = nhChiPhiHienCo.find(
+                (r) => r.ngay_so === day.ngay_so && r.mo_ta === moTaMeal,
+              );
               if (existing) {
                 // UPDATE: chỉ master metadata, KHÔNG touch ref_doan_ngay_id
                 // (giữ ref của nhóm save đầu — display purpose).
@@ -1281,9 +1372,19 @@ export function useSaveDieuTour() {
                   mo_ta: moTaMeal,
                   nha_cung_cap_id: mealItem?.nha_cung_cap_id ?? null,
                 };
-                await externalSupabase.from("doan_chi_phi").update(updateFields).eq("id", existing.id);
+                if (canGhi(existing, updateFields)) {
+                  await externalSupabase.from("doan_chi_phi").update(updateFields).eq("id", existing.id);
+                  Object.assign(existing, updateFields);
+                }
               } else {
-                await externalSupabase.from("doan_chi_phi").insert({ ...alwaysFields, ...initialFields });
+                const { data: moiTao } = await externalSupabase
+                  .from("doan_chi_phi")
+                  .insert({ ...alwaysFields, ...initialFields })
+                  .select("id, doan_id, ngay_so, loai, danh_muc, mo_ta, nha_cung_cap_id")
+                  .single();
+                // Hai bữa trùng mo_ta trong cùng lượt (vd nhà hàng chưa có trong danh mục →
+                // mo_ta rỗng): câu cũ đọc lại DB nên bữa sau thấy dòng bữa trước vừa tạo.
+                if (moiTao) nhChiPhiHienCo.push(moiTao);
               }
             }
           }
@@ -1349,17 +1450,26 @@ export function useSaveDieuTour() {
         }
       }
 
+      // Booking NH của mọi (ngày, bữa) — MỘT lượt đọc thay cho 2 lượt mỗi ngày.
+      // UNIQUE (doan_ngay_id, bua_an) → mỗi khoá tối đa một dòng, y như maybeSingle cũ.
+      // Đọc hỏng → coi như không có booking (câu cũ cũng bỏ qua lỗi y như vậy).
+      const ngayCoId = days.map((d) => d.id).filter((id): id is number => !!id);
+      const bookingNhTheoBua = new Map<string, { id: number; nha_hang_id: number | null; booking_status: string; set_menu_id: number | null }>();
+      if (ngayCoId.length > 0) {
+        const { data: bkNhRows } = await externalSupabase
+          .from("doan_booking_nh")
+          .select("id, doan_ngay_id, bua_an, nha_hang_id, booking_status, set_menu_id")
+          .in("doan_ngay_id", ngayCoId)
+          .in("bua_an", ["trua", "toi"]);
+        for (const bk of bkNhRows ?? []) bookingNhTheoBua.set(`${bk.doan_ngay_id}|${bk.bua_an}`, bk);
+      }
+
       for (const day of days) {
         if (!day.id) continue;
         for (const bua of ["trua", "toi"] as const) {
           const nhId = bua === "trua" ? day.an_trua_nha_hang_id : day.an_toi_nha_hang_id;
           const setMenuId = bua === "trua" ? day.an_trua_set_menu_id : day.an_toi_set_menu_id;
-          const { data: existingBkNh } = await externalSupabase
-            .from("doan_booking_nh")
-            .select("id, nha_hang_id, booking_status, set_menu_id")
-            .eq("doan_ngay_id", day.id)
-            .eq("bua_an", bua)
-            .maybeSingle();
+          const existingBkNh = bookingNhTheoBua.get(`${day.id}|${bua}`);
           if (!existingBkNh) continue;
           // NH thay đổi → xóa booking chưa gửi / đã hủy (không cam kết với NCC)
           if (existingBkNh.nha_hang_id !== nhId) {
@@ -1453,12 +1563,20 @@ export function useSaveDieuTour() {
       }
       const distinctKsIds = distinctKsIdsFull;
       for (const ksId of distinctKsIds) {
-        const { data: existing } = await externalSupabase
-          .from("doan_booking_ks")
-          .select("id, ks_final_status, trang_thai")
-          .eq("doan_id", doanId)
-          .eq("khach_san_id", ksId)
-          .maybeSingle();
+        // Lấy từ allBookingKs vừa đọc (UNIQUE (doan_id, khach_san_id) → tối đa một dòng).
+        // Vòng xoá phía trên chỉ xoá booking của KS KHÔNG nằm trong distinctKsIds nên dòng
+        // tra ở đây chưa bị đụng. allBookingKs đọc hỏng → đọc lại từng KS như cũ.
+        let existing: { id: number; ks_final_status: string | null; trang_thai: string | null } | null;
+        if (allBookingKs) {
+          existing = allBookingKs.find((bk) => bk.khach_san_id === ksId) ?? null;
+        } else {
+          ({ data: existing } = await externalSupabase
+            .from("doan_booking_ks")
+            .select("id, ks_final_status, trang_thai")
+            .eq("doan_id", doanId)
+            .eq("khach_san_id", ksId)
+            .maybeSingle());
+        }
 
         if (!existing) {
           // New booking row
@@ -1503,8 +1621,10 @@ export function useSaveDieuTour() {
       // Trả counters cho caller hiển thị toast warning
       return counters;
     },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["doan"] });
+    onSuccess: (kq) => {
+      // Danh sách đoàn chỉ chứa cột của bảng `doan` → lần lưu không chạm `doan` thì
+      // không có gì để tải lại (mỗi lần tải ~1,5 MB, autosave chạy liên tục khi OP gõ).
+      if (kq.doanUpdated) qc.invalidateQueries({ queryKey: ["doan"] });
       qc.invalidateQueries({ queryKey: ["doan_ngay"] });
       qc.invalidateQueries({ queryKey: ["doan_ngay_item"] });
       qc.invalidateQueries({ queryKey: ["doan_chi_phi"] });
