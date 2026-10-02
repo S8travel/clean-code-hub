@@ -38,6 +38,10 @@ export function HoaDonUNCFilters({
     { value: "visa", label: t("Visa") },
     { value: "bao_hiem", label: t("Bảo hiểm") },
     { value: "hdv", label: "HDV" },
+    { value: "hoan_ung", label: t("Hoàn ứng") },
+    { value: "dinh_ky", label: t("Định kỳ") },
+    { value: "tra_truoc", label: t("Trả trước") },
+    { value: "khac", label: t("Khác") },
   ];
   return (
     <div className="flex flex-wrap items-end gap-3">
