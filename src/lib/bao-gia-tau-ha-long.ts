@@ -237,7 +237,9 @@ export function apGiaTauHaLong(
 
   const ra = [...rows];
   for (const [ngay_so, idxs] of theoNgay) {
-    const buaTau = idxs.filter((i) => laBuaTrenTau(ra[i]));
+    // Bữa trên du thuyền NGỦ ĐÊM đã nằm trong giá du thuyền (lib/bao-gia-tau-ngu-dem.ts)
+    // — không phải tàu đi trong ngày, luật này không áp.
+    const buaTau = idxs.filter((i) => laBuaTrenTau(ra[i]) && !ra[i].tau_ngu_dem);
     if (!buaTau.length) continue; // ngày không ăn trên tàu → không đụng gì
 
     // Tìm tàu theo thứ tự bằng chứng — xem đầu file.

@@ -12,6 +12,9 @@ export type MatchTable = "khach_san" | "nha_hang" | "canh_diem" | "nha_xe_loai_x
 /** Bữa ăn đã nằm SẴN trong 1 vé combo (vd Bà Nà: cáp treo + buffet trưa). */
 export type BaoGomBuaAn = "trua" | "toi" | "ca_hai";
 
+/** Dịch vụ tính tiền riêng mà luật tách ra khỏi một dòng lịch trình (lib/bao-gia-tach-dong.ts). */
+export type KhoaTach = "tau_dinh_fansipan" | "bao_tang_hcm";
+
 export interface AiMatchRef {
   table: MatchTable;
   id: number;
@@ -179,7 +182,39 @@ export interface ResolvedItem {
     gia_cu?: number;
     nguon_cu?: string;
   };
+
+  /** Bữa trên du thuyền NGỦ ĐÊM (xem lib/bao-gia-tau-ngu-dem.ts): đã nằm trong giá
+   *  du thuyền ở dòng khách sạn → để 0, hoặc chỉ tính phần gọi thêm. */
+  tau_ngu_dem?: {
+    /** Du thuyền đoàn ngủ (tên dòng khách sạn đêm đó). */
+    ten: string;
+    /** Ngày của đêm ngủ trên tàu: ngày của dòng ăn (hôm lên tàu) hoặc ngày trước (bữa hôm sau). */
+    dem: number;
+    /** Món gọi thêm ngoài bữa trên tàu, nguyên văn đối tác ghi — có thì dòng vẫn tính tiền phần này. */
+    goi_them?: string;
+  };
+
+  /** Combo Fansipan (lib/bao-gia-combo-fansipan.ts): dòng cáp treo tính giá combo
+   *  cáp treo + buffet trưa + tàu Mường Hoa; buffet / tàu Mường Hoa cùng ngày để 0. */
+  combo_fansipan?: {
+    vai_tro: "cap_treo" | "buffet" | "tau_muong_hoa";
+    /** Tên combo trong danh mục; null = danh mục chưa có combo nào có giá. */
+    ten: string | null;
+    /** Giá combo lúc áp (dòng cáp treo) — chú thích nói ra, và nhận ra giá đã sửa tay. */
+    gia?: number;
+    /** Giá + nguồn trước khi luật thay (máy khớp nhầm / sổ tay cũ). */
+    gia_cu?: number;
+    nguon_cu?: string;
+  };
+  /** Dòng gốc: các dịch vụ tính riêng đã được tách ra dòng khác (lib/bao-gia-tach-dong.ts). */
+  da_tach?: KhoaTach[];
+  /** Dòng do luật tách ra khỏi một dòng lịch trình để tính tiền riêng. */
+  tach_tu?: { khoa: KhoaTach; dong_goc: string };
 }
+
+/** Dòng ăn mà luật trọn gói (du thuyền ngủ đêm, combo Fansipan) đã quyết giá —
+ *  máy combo không được ẩn hay cảnh báo trùng trên nó nữa. */
+const anDaTheoLuatTronGoi = (m: ResolvedItem) => !!m.tau_ngu_dem || !!m.combo_fansipan;
 
 /** Dòng TRỐNG do OP tự thêm trong màn review (AI đọc sót mục). Chưa có tên/giá
  *  → `status: "no_price"` để bảng tô vàng nhắc điền, KHÔNG dùng "unmatched"
@@ -1033,6 +1068,9 @@ export function analyzeCombo(rows: ResolvedItem[], boQua?: ReadonlySet<number>):
       for (const mi of meals) {
         const m = rows[mi];
         if (suppressed.has(mi)) continue;        // combo đầu tiên làm chủ
+        // Luật trọn gói đã xử lý dòng này (để 0, hoặc chỉ còn món gọi thêm — ẩn đi là
+        // mất luôn tiền món gọi thêm).
+        if (anDaTheoLuatTronGoi(m)) continue;
         if (!comboCoversBua(r.bao_gom_bua_an, m.bua_an)) continue;
         if (m.tinh_rieng) { overridden.add(mi); continue; } // OP bắt tính riêng
         suppressed.set(mi, {
@@ -1047,7 +1085,8 @@ export function analyzeCombo(rows: ResolvedItem[], boQua?: ReadonlySet<number>):
       // ăn KHÔNG ghi rõ trưa/tối → im lặng ở đây là tệ nhất: OP nhìn chip xanh
       // tưởng đã trừ, thực tế bữa ăn vẫn tính đủ tiền.
       if (daTru === 0 && !r.bo_qua_combo) {
-        const moHo = meals.filter((mi) => !suppressed.has(mi) && !rows[mi].tinh_rieng && !rows[mi].bua_an);
+        const moHo = meals.filter((mi) => !suppressed.has(mi) && !rows[mi].tinh_rieng
+          && !anDaTheoLuatTronGoi(rows[mi]) && !rows[mi].bua_an);
         if (moHo.length > 0) warnings.set(i, { bua: r.bao_gom_bua_an, mealIdxs: moHo, nguon: "khong_ro_bua" });
       }
       return; // đã xác nhận → không chạy nhánh đoán mò bên dưới
@@ -1064,7 +1103,8 @@ export function analyzeCombo(rows: ResolvedItem[], boQua?: ReadonlySet<number>):
     const bua = hint === "khong_ro" ? null : hint;
     const lienQuan = meals.filter((mi) => {
       const m = rows[mi];
-      if (m.tinh_rieng) return false;
+      // Luật trọn gói đã để 0 / chỉ tính món gọi thêm — không còn gì tính trùng.
+      if (m.tinh_rieng || anDaTheoLuatTronGoi(m)) return false;
       return bua == null || comboCoversBua(bua, m.bua_an);
     });
     if (lienQuan.length === 0) return;

@@ -10,10 +10,15 @@
 // biến thể là một khoá mới. Đúng hai khoá từng học được đều ghi 40.000 cho dòng
 // CHỈ ĐI NGOÀI — vừa thu oan chỗ không có vé, vừa không ai tra trúng cụm có nhà
 // sàn, nên cụm có vé thật thì báo giá để trống.
+//
+// Bảo tàng Hồ Chí Minh (胡志明博物館) nằm sát lăng nhưng KHÔNG nằm trong vé cụm —
+// tính tiền riêng (OP chốt 03/10/2026). Đối tác viết chung dòng cụm thì tách ra một
+// dòng riêng (xem lib/bao-gia-tach-dong.ts), dòng cụm giữ nguyên cách tính.
 
 import { boDau } from "./bang-gia-sua-tay";
 import { gianHoa } from "./han-gian-hoa";
 import type { ResolveMaps, ResolvedItem } from "./bao-gia-ai-resolve";
+import { daTach, dongTach, ghiDaTach, timVe, type VeDanhMuc } from "./bao-gia-tach-dong";
 
 /** Có vào bên trong (mua vé) hay chỉ nhìn từ ngoài (không vé). */
 export type VeCumBaDinh = "vao_trong" | "ngoai_quan";
@@ -91,6 +96,35 @@ export function veCumBaDinh(maps: ResolveMaps): { id: number; ten: string; gia: 
 const themGhiChu = (cu: string | undefined, them: string) =>
   (cu ?? "").includes(them) ? (cu ?? "") : [cu?.trim(), them].filter(Boolean).join(" · ");
 
+const coHanChu = (s: string) => /[一-鿿]/.test(s);
+const BAO_TANG_HCM_VI = ["bao tang ho chi minh", "bao tang bac ho", "bao tang hcm"];
+
+/** Một mảnh có phải Bảo tàng Hồ Chí Minh (mà không chỉ đi ngoài) không. Mảnh chữ Hán
+ *  phải có chữ 胡 hoặc đúng "博物館" trơn: quanh Ba Đình còn bảo tàng khác
+ *  (軍事博物館 — Quân sự), không được nhận nhầm. */
+function laManhBaoTangHcm(m: string): boolean {
+  const zh = gianHoa(m.normalize("NFKC")).toLowerCase();
+  if (coHanChu(zh)) {
+    if (!zh.includes("博物馆") || chuaMot(zh, NGOAI_QUAN_ZH)) return false;
+    return zh.includes("胡") || zh.replace(/[()（）\s]/g, "") === "博物馆";
+  }
+  const vi = boDau(m).toLowerCase();
+  return chuaMot(vi, BAO_TANG_HCM_VI) && !chuaMot(vi, NGOAI_QUAN_VI);
+}
+
+/** Mảnh nêu Bảo tàng Hồ Chí Minh trong dòng, nguyên văn đối tác; null = không có.
+ *  Có chữ Hán thì chỉ đọc chữ Hán — như phanLoaiCumBaDinh. */
+export function manhBaoTangHcm(tenZh: string | null | undefined, tenVi?: string | null): string | null {
+  const goc = coHanChu(tenZh ?? "") ? tenZh : tenVi;
+  for (const m of (goc ?? "").split(RE_NGAN)) if (laManhBaoTangHcm(m)) return m.trim();
+  return null;
+}
+
+/** Vé Bảo tàng Hồ Chí Minh trong danh mục cảnh điểm (nguồn giá); null = chưa có. */
+export function veBaoTangHcm(maps: ResolveMaps): VeDanhMuc | null {
+  return timVe(maps, (ten) => BAO_TANG_HCM_VI.some((k) => ten.includes(` ${k} `)));
+}
+
 /**
  * Áp luật cụm Ba Đình lên các dòng vé. Trả MẢNG MỚI (không sửa tại chỗ).
  *
@@ -99,6 +133,8 @@ const themGhiChu = (cu: string | undefined, them: string) =>
  *  · vào trong, dòng đã có giá    → GIỮ giá đó (người mình từng gõ đáng tin hơn
  *    một con số mặc định; danh mục có thể chưa kịp lên giá)
  *  · vào trong lần thứ hai trong cùng ngày → 0, vì một vé vào được cả hai nơi
+ *  · dòng cụm có Bảo tàng Hồ Chí Minh → tách bảo tàng ra một dòng riêng nối vào
+ *    CUỐI mảng (mỗi ngày một lần; ngày đã có dòng bảo tàng riêng thì thôi)
  *
  * `sua_tay` (OP vừa gõ trong màn review) thắng tất cả, không đụng tới.
  */
@@ -109,6 +145,10 @@ export function apVeCumBaDinh(
   const ve = veCumBaDinh(maps);
   const ra = [...rows];
   const daTinhTrongNgay = new Set<number>();
+  // Ngày đã có dòng bảo tàng riêng: đối tác tự viết riêng, hoặc luật đã tách ở lần trước.
+  const coBaoTangRieng = new Set(rows.filter(laDongBaoTangRieng).map((r) => r.ngay_so));
+  const veBaoTang = veBaoTangHcm(maps);
+  const them: ResolvedItem[] = [];
 
   for (let i = 0; i < ra.length; i++) {
     const r = ra[i];
@@ -116,35 +156,49 @@ export function apVeCumBaDinh(
     const loai = phanLoaiCumBaDinh(r.ten_zh, r.mo_ta || r.match_label);
     if (!loai) continue;
 
+    let moi: ResolvedItem;
     if (loai === "ngoai_quan") {
-      ra[i] = {
+      moi = {
         ...r, don_gia: 0, nguon_gia: undefined,
         ghi_chu: themGhiChu(r.ghi_chu, GHI_CHU_KHONG_VAO),
         cum_ba_dinh: "ngoai_quan",
       };
-      continue;
-    }
-
-    if (daTinhTrongNgay.has(r.ngay_so)) {
-      ra[i] = {
+    } else if (daTinhTrongNgay.has(r.ngay_so)) {
+      moi = {
         ...r, don_gia: 0, nguon_gia: undefined,
         ghi_chu: themGhiChu(r.ghi_chu, GHI_CHU_CHUNG_VE),
         cum_ba_dinh: "da_gom",
       };
-      continue;
+    } else {
+      daTinhTrongNgay.add(r.ngay_so);
+      const giuGiaCu = r.don_gia > 0;
+      moi = giuGiaCu || !ve
+        ? { ...r, cum_ba_dinh: "vao_trong" }
+        : {
+          ...r, don_gia: ve.gia, nguon_gia: undefined, status: "matched",
+          match_table: "canh_diem", match_id: ve.id, match_label: ve.ten,
+          cum_ba_dinh: "vao_trong",
+        };
     }
 
-    daTinhTrongNgay.add(r.ngay_so);
-    const giuGiaCu = r.don_gia > 0;
-    if (giuGiaCu || !ve) {
-      ra[i] = { ...r, cum_ba_dinh: "vao_trong" };
-      continue;
+    const manh = manhBaoTangHcm(r.ten_zh, r.mo_ta);
+    if (manh && !daTach(r, "bao_tang_hcm")) {
+      if (!coBaoTangRieng.has(r.ngay_so)) {
+        them.push(dongTach(moi, "bao_tang_hcm", {
+          ten_zh: coHanChu(r.ten_zh) ? manh : "", mo_ta: "Bảo tàng Hồ Chí Minh",
+        }, veBaoTang));
+        coBaoTangRieng.add(r.ngay_so);
+      }
+      moi = ghiDaTach(moi, "bao_tang_hcm");
     }
-    ra[i] = {
-      ...r, don_gia: ve.gia, nguon_gia: undefined, status: "matched",
-      match_table: "canh_diem", match_id: ve.id, match_label: ve.ten,
-      cum_ba_dinh: "vao_trong",
-    };
+    ra[i] = moi;
   }
-  return ra;
+  return them.length ? [...ra, ...them] : ra;
+}
+
+/** Dòng vé CHỈ là Bảo tàng Hồ Chí Minh (không phải dòng cụm có kèm bảo tàng). */
+function laDongBaoTangRieng(r: ResolvedItem): boolean {
+  if (r.loai !== "ticket") return false;
+  if (r.tach_tu?.khoa === "bao_tang_hcm") return true;
+  return manhBaoTangHcm(r.ten_zh, r.mo_ta) != null && !phanLoaiCumBaDinh(r.ten_zh, r.mo_ta || r.match_label);
 }

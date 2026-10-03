@@ -27,7 +27,7 @@ import {
   applyKsBuaRules, toKsBuaRules,
   hotelChoiceGroups, defaultHotelSelection, applyExclusions, droppedByHotel,
   analyzeCombo, comboPatchForRef, sanitizeDraftRows, newResolvedItem, BUA_LABEL,
-  type ResolvedItem, type AiReviewDraft, type BaoGomBuaAn,
+  type ResolvedItem, type ResolveMaps, type AiReviewDraft, type BaoGomBuaAn,
 } from "@/lib/bao-gia-ai-resolve";
 import { useBaoGiaAliasMap, useLearnAliases } from "@/hooks/use-bao-gia-aliases";
 import { useBaoGiaRuleList } from "@/hooks/use-bao-gia-rules";
@@ -40,9 +40,11 @@ import { Popover, PopoverAnchor, PopoverContent, PopoverTrigger } from "@/compon
 import { resolveStorageUrl } from "@/lib/storage-url";
 import { TY_GIA_BAO_GIA_MAC_DINH, tyGiaCuaBaoGia } from "@/lib/bao-gia-ty-gia";
 import { apGiaTauHaLong } from "@/lib/bao-gia-tau-ha-long";
+import { apTauNguDem } from "@/lib/bao-gia-tau-ngu-dem";
 import { apVeCumBaDinh } from "@/lib/bao-gia-cum-ba-dinh";
+import { apComboFansipan } from "@/lib/bao-gia-combo-fansipan";
 import { apMonVietHaNoi } from "@/lib/bao-gia-mon-viet-ha-noi";
-import { chuThichLuat, toBaoGiaItemsCoChuThich } from "@/lib/bao-gia-chu-thich-luat";
+import { chuThichLuat, dongDe0TheoLuat, toBaoGiaItemsCoChuThich } from "@/lib/bao-gia-chu-thich-luat";
 import { ChuThichLuatList } from "@/components/bao-gia/ChuThichLuatList";
 import { locDongMayDocTrung, type DongDaBo } from "@/lib/bao-gia-trung-lap";
 
@@ -54,6 +56,26 @@ const quyDoiUsdSoTay = (usd: number, loai: LoaiSoTay) =>
 
 /** Dòng người nhập đã tự tay sửa → sổ tay KHÔNG được đè lại. */
 const giuNguyenDongSuaTay = (r: ResolvedItem) => !!r.sua_tay;
+
+/** Các luật giá chạy sau sổ tay, đúng thứ tự (xem chú thích ở runExtract).
+ *  Du thuyền ngủ đêm đứng TRƯỚC luật tàu Hạ Long: bữa trên tàu của đêm ngủ tàu đã
+ *  nằm trong giá du thuyền, không được tính theo giá tàu đi trong ngày.
+ *  Cụm Ba Đình và combo Fansipan có thể TÁCH dịch vụ tính riêng ra dòng mới — dòng
+ *  mới nối vào cuối mảng, chỉ số dòng cũ (lựa chọn khách sạn của nháp) giữ nguyên. */
+const apLuatGia = (rows: ResolvedItem[], maps: ResolveMaps, tourDate: string | null | undefined) =>
+  apMonVietHaNoi(
+    apComboFansipan(apVeCumBaDinh(apGiaTauHaLong(apTauNguDem(rows, maps), maps, tourDate), maps), maps),
+    maps,
+  );
+
+/** Dòng mà LUẬT tự ra giá (chưa ai sửa tay) → KHÔNG học vào sổ tay / bộ nhớ khớp:
+ *  luật tự ra lại mỗi lần, còn khoá sổ tay không mang ngữ cảnh của luật. Món Việt
+ *  Hà Nội: khoá không mang thành phố — học vào là "Home越式…" ở Hội An cũng ăn giá
+ *  MAMMOM. Du thuyền ngủ đêm: khoá "船上自助餐" không biết đêm đó có ngủ tàu hay
+ *  không — học số 0 vào là bữa trên tàu ngày của đoàn sau cũng thành 0. Combo
+ *  Fansipan / dòng luật tách ra: giá do danh mục + luật quyết, tự ra lại mỗi lần. */
+const giaDoLuatTuRa = (r: ResolvedItem) =>
+  (!!r.mon_viet_ha_noi || !!r.tau_ngu_dem || !!r.combo_fansipan || !!r.tach_tu) && !r.sua_tay;
 
 interface Props {
   open: boolean;
@@ -159,9 +181,7 @@ export function BaoGiaAiImport({
           sanitizeDraftRows(savedReview.items),
           banDo, quyDoiUsdSoTay, giuNguyenDongSuaTay,
         );
-        setRows(maps
-          ? apMonVietHaNoi(apVeCumBaDinh(apGiaTauHaLong(daSoTay, maps, tourDate), maps), maps)
-          : daSoTay);
+        setRows(maps ? apLuatGia(daSoTay, maps, tourDate) : daSoTay);
         // Bản gốc đã cất ở lượt phân tích trước → cột đối chiếu có ngay, khỏi
         // phải phân tích lại chỉ để xem file.
         if (draft.noi_dung_goc?.trim()) setNguonGoc({ kieu: "text", noiDung: draft.noi_dung_goc });
@@ -284,7 +304,9 @@ export function BaoGiaAiImport({
       // hai khoá học được đều ghi tiền vé cho dòng CHỈ ĐI NGOÀI.
       // Luật món Việt Hà Nội chạy SAU sổ tay: sổ tay đang nhớ cả giá Home Hội An
       // cho đúng loại dòng này, mà khoá sổ tay không mang thành phố.
-      const daApTau = apMonVietHaNoi(apVeCumBaDinh(apGiaTauHaLong(resolved, maps, tourDate), maps), maps);
+      // Luật du thuyền ngủ đêm chạy SAU sổ tay và TRƯỚC luật tàu: "船上自助餐" của
+      // đêm ngủ tàu đã nằm trong giá du thuyền, sổ tay / tàu ngày đều không biết điều đó.
+      const daApTau = apLuatGia(resolved, maps, tourDate);
       setTen(result.ten_chuong_trinh ?? "");
       setSoNgay(result.so_ngay && result.so_ngay > 0 ? result.so_ngay : 1);
       setRows(daApTau);
@@ -415,11 +437,11 @@ export function BaoGiaAiImport({
     const nguonLaTau = !!t?.ten && !t.thieu_gia && !t.giu_gia_cu && !r.sua_tay;
     // Luật món Việt Hà Nội đã đặt MAMMOM → chú thích luật là nguồn giá, như tàu.
     const nguonLaMonVietHn = !!r.mon_viet_ha_noi && !r.mon_viet_ha_noi.thieu_gia && !r.sua_tay;
-    // Dòng để 0 CỐ Ý (không vào cụm Ba Đình, vé đã tính ở dòng cùng ngày, vé tàu
-    // đã gộp vào bữa ăn) — nhãn cam "cần điền giá" ở đây chỉ dụ người nhập gõ thêm tiền.
-    const la0CoY = r.don_gia <= 0
-      && (r.cum_ba_dinh === "ngoai_quan" || r.cum_ba_dinh === "da_gom" || !!r.ve_vinh_da_gom);
-    return nguonLaTau || nguonLaMonVietHn || la0CoY ? null : nhanNguonChinh(r);
+    // Giá combo Fansipan / dòng luật tách ra lấy từ danh mục → chú thích đã nói nguồn.
+    const nguonLaLuatKhac = !r.sua_tay && r.don_gia > 0
+      && ((r.combo_fansipan?.vai_tro === "cap_treo" && !!r.combo_fansipan.ten) || !!r.tach_tu);
+    // Dòng luật để 0 CỐ Ý — nhãn cam "cần điền giá" ở đây chỉ dụ người nhập gõ thêm tiền.
+    return nguonLaTau || nguonLaMonVietHn || nguonLaLuatKhac || dongDe0TheoLuat(r) ? null : nhanNguonChinh(r);
   };
 
   const nhanNguonChinh = (r: ResolvedItem) => {
@@ -564,8 +586,8 @@ export function BaoGiaAiImport({
     if (included.length === 0) return;
     onApply(previewItems, ten, soNgay);
     // Học bộ nhớ khớp từ các dòng đã áp dụng (fire-and-forget) → lần sau tự khớp.
-    // Bỏ dòng luật món Việt Hà Nội chưa ai sửa — cùng lý do với sổ tay bên dưới.
-    const toLearn = aliasesToLearn(included.filter((r) => !r.mon_viet_ha_noi || r.sua_tay), user?.user_id);
+    // Bỏ dòng do luật tự ra giá mà chưa ai sửa — xem giaDoLuatTuRa.
+    const toLearn = aliasesToLearn(included.filter((r) => !giaDoLuatTuRa(r)), user?.user_id);
     if (toLearn.length) learn.mutate(toLearn);
 
     // Ghi vào SỔ TAY: cặp (tiếng Trung ↔ tiếng Việt ↔ giá) người nhập vừa chốt.
@@ -573,13 +595,11 @@ export function BaoGiaAiImport({
     // vẫn đúng, chỉ là lần sau chưa nhớ.
     // Dòng máy đoán chưa chắc KHÔNG được vào sổ tay: người nhập mới chỉ tick "đã
     // xem", chưa xác nhận là đúng — ghi vào là biến phỏng đoán thành giá chuẩn.
-    // Dòng luật món Việt Hà Nội cũng không (trừ khi người nhập sửa tay): luật tự
-    // ra lại mỗi lần, còn khoá sổ tay không mang thành phố — học vào là chuỗi
-    // "Home越式…" ở Hội An lần sau cũng ăn giá MAMMOM.
+    // Dòng do luật tự ra giá cũng không (trừ khi người nhập sửa tay) — xem giaDoLuatTuRa.
     const chuaChacSet = new Set(chuaChac);
     const deHoc = locDongDeHoc(
       included
-        .filter((r) => !chuaChacSet.has(r) && (!r.mon_viet_ha_noi || r.sua_tay)
+        .filter((r) => !chuaChacSet.has(r) && !giaDoLuatTuRa(r)
           && (LOAI_SO_TAY as readonly string[]).includes(r.loai))
         .map((r) => ({
           ten_zh: r.ten_zh,
@@ -645,7 +665,7 @@ export function BaoGiaAiImport({
   };
 
   const matched = included.filter((r) => r.don_gia > 0).length;
-  const missing = included.filter((r) => r.don_gia <= 0).length;
+  const missing = included.filter((r) => r.don_gia <= 0 && !dongDe0TheoLuat(r)).length;
   const busy = extract.isPending || mapsLoading || extracting;
 
   return (
@@ -854,7 +874,7 @@ export function BaoGiaAiImport({
                         {list.map(({ r, idx }) => {
                           const isAltHotel = r.loai === "hotel" && groups.has(r.ngay_so);
                           const chosen = !isAltHotel || selection[r.ngay_so] === idx;
-                          const ok = r.don_gia > 0;
+                          const ok = r.don_gia > 0 || dongDe0TheoLuat(r);
                           const sup = combo.suppressed.get(idx);   // dòng ăn đã nằm trong combo
                           const warn = combo.warnings.get(idx);    // dòng vé nghi là combo kèm ăn
                           const rowCls = sup ? "bg-slate-50 text-slate-400"

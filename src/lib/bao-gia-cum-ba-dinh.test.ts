@@ -1,6 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { apVeCumBaDinh, phanLoaiCumBaDinh, veCumBaDinh, GHI_CHU_CHUNG_VE, GHI_CHU_KHONG_VAO } from "./bao-gia-cum-ba-dinh";
+import {
+  apVeCumBaDinh, manhBaoTangHcm, phanLoaiCumBaDinh, veCumBaDinh, GHI_CHU_CHUNG_VE, GHI_CHU_KHONG_VAO,
+} from "./bao-gia-cum-ba-dinh";
 import type { ResolveMaps, ResolvedItem } from "./bao-gia-ai-resolve";
+import { chuThichLuat } from "./bao-gia-chu-thich-luat";
 
 // Danh mục rút gọn theo đúng hình dạng thật: cụm Ba Đình nằm rải ở nhiều bản
 // ghi, có cái ghi rõ "xem ngoài". Mức vé ở đây là giá NIÊM YẾT công khai, không
@@ -151,5 +154,80 @@ describe("apVeCumBaDinh — áp luật lên các dòng vé", () => {
     const ra = apVeCumBaDinh(goc, maps);
     expect(goc[0].don_gia).toBe(0);
     expect(ra).not.toBe(goc);
+  });
+});
+
+describe("Bảo tàng Hồ Chí Minh trong cụm Ba Đình — tính tiền riêng", () => {
+  const coBaoTang: ResolveMaps = {
+    ...maps,
+    canhDiem: new Map([...maps.canhDiem, [900, { ten: "Bảo tàng Hồ Chí Minh", gia: 40_000 }]]),
+  };
+  // Đúng dòng máy đọc ra từ lịch trình thật (03/10).
+  const cumCoBaoTang = (over: Partial<ResolvedItem> = {}) => dong({
+    ngay_so: 15, ten_zh: "胡志明陵寢、胡志明故居、胡志明博物館、一柱廟", mo_ta: "Phủ Chủ tịch + Nhà sàn Bác Hồ",
+    don_gia: 40_000, match_table: "canh_diem", match_id: 239, ...over,
+  });
+
+  it("nhận ra mảnh bảo tàng — không nhầm bảo tàng khác quanh Ba Đình, không tính khi chỉ xem ngoài", () => {
+    expect(manhBaoTangHcm("胡志明陵寢、胡志明故居、胡志明博物館、一柱廟")).toBe("胡志明博物館");
+    expect(manhBaoTangHcm("巴亭廣場-胡志明陵寢-博物館")).toBe("博物館");
+    expect(manhBaoTangHcm("巴亭廣場、軍事博物館")).toBeNull();
+    expect(manhBaoTangHcm("胡志明陵寢、胡志明博物館(外觀)")).toBeNull();
+    expect(manhBaoTangHcm("", "Lăng Bác, Bảo tàng Hồ Chí Minh")).toBe("Bảo tàng Hồ Chí Minh");
+  });
+
+  it("dòng cụm có bảo tàng → giữ vé cụm, tách bảo tàng ra dòng riêng ở CUỐI mảng, giá theo danh mục", () => {
+    const goc = [cumCoBaoTang(), dong({ ngay_so: 15, ten_zh: "文廟", don_gia: 70_000 })];
+    const ra = apVeCumBaDinh(goc, coBaoTang);
+    expect(ra).toHaveLength(3);
+    expect(ra[0]).toMatchObject({ don_gia: 40_000, cum_ba_dinh: "vao_trong", da_tach: ["bao_tang_hcm"] });
+    expect(ra[1]).toBe(goc[1]);
+    expect(ra[2]).toMatchObject({
+      ngay_so: 15, loai: "ticket", ten_zh: "胡志明博物館", mo_ta: "Bảo tàng Hồ Chí Minh",
+      don_gia: 40_000, match_table: "canh_diem", match_id: 900, status: "matched",
+      tach_tu: { khoa: "bao_tang_hcm", dong_goc: "胡志明陵寢、胡志明故居、胡志明博物館、一柱廟" },
+    });
+  });
+
+  it("cụm chỉ xem ngoài mà có vào bảo tàng → dòng cụm 0, bảo tàng vẫn tính", () => {
+    const ra = apVeCumBaDinh([dong({ ten_zh: "巴亭廣場、胡志明陵寢(外觀)、胡志明博物館" })], coBaoTang);
+    expect(ra[0]).toMatchObject({ don_gia: 0, cum_ba_dinh: "ngoai_quan" });
+    expect(ra[1]).toMatchObject({ ten_zh: "胡志明博物館", don_gia: 40_000 });
+  });
+
+  it("danh mục chưa có bảo tàng → vẫn tách dòng, để người nhập gõ giá (kèm cảnh báo)", () => {
+    const ra = apVeCumBaDinh([cumCoBaoTang()], maps);
+    expect(ra[1]).toMatchObject({ don_gia: 0, status: "no_price", match_table: null });
+    expect(chuThichLuat(ra[1]).some((c) => c.muc === "canh_bao" && c.noi_dung.includes("chưa có Bảo tàng Hồ Chí Minh"))).toBe(true);
+  });
+
+  it("đối tác đã viết bảo tàng thành dòng riêng → không tách thêm", () => {
+    const rieng = dong({ ngay_so: 15, ten_zh: "胡志明博物館", don_gia: 40_000 });
+    const ra = apVeCumBaDinh([cumCoBaoTang(), rieng], coBaoTang);
+    expect(ra).toHaveLength(2);
+    expect(ra[0].da_tach).toEqual(["bao_tang_hcm"]);
+    expect(ra[1]).toBe(rieng);
+  });
+
+  it("hai dòng cụm cùng ngày đều nêu bảo tàng → chỉ một dòng bảo tàng", () => {
+    const ra = apVeCumBaDinh([cumCoBaoTang(), cumCoBaoTang({ ten_zh: "胡志明故居、胡志明博物館" })], coBaoTang);
+    expect(ra.filter((r) => r.tach_tu)).toHaveLength(1);
+  });
+
+  it("mở lại bản nháp: không tách lần nữa; người nhập xoá dòng bảo tàng thì không tự mọc lại", () => {
+    const mot = apVeCumBaDinh([cumCoBaoTang()], coBaoTang);
+    expect(apVeCumBaDinh(mot, coBaoTang)).toEqual(mot);
+    expect(apVeCumBaDinh(mot.slice(0, -1), coBaoTang)).toHaveLength(1);
+  });
+
+  it("chú thích: dòng cụm nói bảo tàng đã tách; dòng bảo tàng nói tách từ dòng nào", () => {
+    const [cum, bt] = apVeCumBaDinh([cumCoBaoTang()], coBaoTang);
+    expect(chuThichLuat(cum).map((c) => c.noi_dung)).toContain(
+      "Bảo tàng Hồ Chí Minh trong dòng này không nằm trong vé cụm — đã tách ra tính riêng ở dòng khác cùng ngày.",
+    );
+    expect(chuThichLuat(bt)).toEqual([{
+      muc: "thong_tin",
+      noi_dung: 'Luật cụm Ba Đình: Bảo tàng Hồ Chí Minh không nằm trong vé Phủ Chủ tịch + nhà sàn — tách từ dòng "胡志明陵寢、胡志明故居、胡志明博物館、一柱廟" để tính riêng.',
+    }]);
   });
 });

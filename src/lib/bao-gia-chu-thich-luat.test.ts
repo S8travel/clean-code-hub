@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { chuThichLuat, chuThichHienThi, toBaoGiaItemsCoChuThich } from "./bao-gia-chu-thich-luat";
+import { chuThichLuat, chuThichHienThi, dongDe0TheoLuat, toBaoGiaItemsCoChuThich } from "./bao-gia-chu-thich-luat";
 import { lyDoChonSet, type ResolvedItem } from "./bao-gia-ai-resolve";
 import { TAU_THU_VE_VINH_RIENG, VE_VINH_HA_LONG } from "./bao-gia-tau-ha-long";
 
@@ -97,6 +97,50 @@ describe("chuThichLuat — luật tàu Hạ Long", () => {
 
   it("cờ tàu trên dòng KHÔNG phải dòng ăn (đã đổi loại) thì bỏ qua", () => {
     expect(chuThichLuat(anTau({ loai: "ticket" }))).toEqual([]);
+  });
+});
+
+describe("chuThichLuat — luật du thuyền ngủ đêm", () => {
+  const anNguTau = (over: Partial<ResolvedItem> = {}) => dong({
+    loai: "meal", bua_an: "toi", ten_zh: "船上晚宴", tau_ngu_dem: { ten: "Alpha Cruise", dem: 3 }, ...over,
+  });
+
+  it("bữa đã gồm trong giá du thuyền → nói rõ tàu, đêm, để 0", () => {
+    const ds = noiDung(anNguTau());
+    expect(ds).toEqual([
+      "thong_tin: Luật du thuyền ngủ đêm: đoàn ngủ trên Alpha Cruise (đêm ngày 3) — bữa trên tàu (trưa + tối hôm lên tàu, brunch hôm sau) đã gồm trong giá du thuyền ở dòng khách sạn, chỉ nước uống và món gọi thêm tính riêng → để 0.",
+    ]);
+  });
+
+  it("có ai gõ giá lại cho bữa đã gồm → cảnh báo tính 2 lần", () => {
+    const ds = noiDung(anNguTau({ don_gia: 500_000, sua_tay: true }));
+    expect(ds[1]).toMatch(/^canh_bao: Dòng này đang có giá 500\.000 ₫ — giữ thì bữa ăn bị tính 2 lần/);
+  });
+
+  it("món gọi thêm → chỉ tính món đó; chưa có giá thì nhắc nhập", () => {
+    const them = anNguTau({ don_gia: 300_000, tau_ngu_dem: { ten: "Alpha Cruise", dem: 3, goi_them: "龍蝦" } });
+    expect(noiDung(them)).toEqual([
+      "thong_tin: Luật du thuyền ngủ đêm: bữa trên tàu đã gồm trong giá du thuyền Alpha Cruise (đêm ngày 3); dòng này chỉ tính món gọi thêm: 龍蝦.",
+    ]);
+    expect(noiDung({ ...them, don_gia: 0 })[1]).toBe("canh_bao: Chưa có giá món gọi thêm (龍蝦) — nhập giá.");
+  });
+});
+
+describe("dongDe0TheoLuat — dòng luật cố ý để 0 (không tô cam 'cần điền giá')", () => {
+  it("các luật để 0: ngoài cụm Ba Đình, vé đã gồm, bữa trên du thuyền ngủ đêm", () => {
+    expect(dongDe0TheoLuat(dong({ loai: "ticket", cum_ba_dinh: "ngoai_quan" }))).toBe(true);
+    expect(dongDe0TheoLuat(dong({ loai: "ticket", cum_ba_dinh: "da_gom" }))).toBe(true);
+    expect(dongDe0TheoLuat(dong({ loai: "ticket", ve_vinh_da_gom: true }))).toBe(true);
+    expect(dongDe0TheoLuat(dong({ tau_ngu_dem: { ten: "Alpha Cruise", dem: 3 } }))).toBe(true);
+  });
+
+  it("không phải: dòng chưa ai điền giá, món gọi thêm chưa có giá, dòng luật mà đang có giá", () => {
+    expect(dongDe0TheoLuat(dong({}))).toBe(false);
+    expect(dongDe0TheoLuat(dong({ loai: "ticket", cum_ba_dinh: "vao_trong" }))).toBe(false);
+    expect(dongDe0TheoLuat(dong({ tau_ngu_dem: { ten: "Alpha Cruise", dem: 3, goi_them: "龍蝦" } }))).toBe(false);
+    expect(dongDe0TheoLuat(dong({ don_gia: 500_000, tau_ngu_dem: { ten: "Alpha Cruise", dem: 3 } }))).toBe(false);
+    // Người nhập đã đổi dòng sang loại khác → cờ bữa trên tàu không còn nói gì về dòng này.
+    expect(dongDe0TheoLuat(dong({ loai: "ticket", tau_ngu_dem: { ten: "Alpha Cruise", dem: 3 } }))).toBe(false);
   });
 });
 
