@@ -44,6 +44,7 @@ import { apTauNguDem } from "@/lib/bao-gia-tau-ngu-dem";
 import { apVeCumBaDinh } from "@/lib/bao-gia-cum-ba-dinh";
 import { apComboFansipan } from "@/lib/bao-gia-combo-fansipan";
 import { apMonVietHaNoi } from "@/lib/bao-gia-mon-viet-ha-noi";
+import { apMenuNhaHangChiDinh } from "@/lib/bao-gia-nha-hang-chi-dinh";
 import { chuThichLuat, dongDe0TheoLuat, toBaoGiaItemsCoChuThich } from "@/lib/bao-gia-chu-thich-luat";
 import { ChuThichLuatList } from "@/components/bao-gia/ChuThichLuatList";
 import { locDongMayDocTrung, type DongDaBo } from "@/lib/bao-gia-trung-lap";
@@ -61,11 +62,16 @@ const giuNguyenDongSuaTay = (r: ResolvedItem) => !!r.sua_tay;
  *  Du thuyền ngủ đêm đứng TRƯỚC luật tàu Hạ Long: bữa trên tàu của đêm ngủ tàu đã
  *  nằm trong giá du thuyền, không được tính theo giá tàu đi trong ngày.
  *  Cụm Ba Đình và combo Fansipan có thể TÁCH dịch vụ tính riêng ra dòng mới — dòng
- *  mới nối vào cuối mảng, chỉ số dòng cũ (lựa chọn khách sạn của nháp) giữ nguyên. */
+ *  mới nối vào cuối mảng, chỉ số dòng cũ (lựa chọn khách sạn của nháp) giữ nguyên.
+ *  Nhà hàng chỉ định đứng CUỐI: chỉ nhận dòng ăn các luật trên chưa quyết giá. */
 const apLuatGia = (rows: ResolvedItem[], maps: ResolveMaps, tourDate: string | null | undefined) =>
-  apMonVietHaNoi(
-    apComboFansipan(apVeCumBaDinh(apGiaTauHaLong(apTauNguDem(rows, maps), maps, tourDate), maps), maps),
+  apMenuNhaHangChiDinh(
+    apMonVietHaNoi(
+      apComboFansipan(apVeCumBaDinh(apGiaTauHaLong(apTauNguDem(rows, maps), maps, tourDate), maps), maps),
+      maps,
+    ),
     maps,
+    tourDate,
   );
 
 /** Dòng mà LUẬT tự ra giá (chưa ai sửa tay) → KHÔNG học vào sổ tay / bộ nhớ khớp:
@@ -73,9 +79,12 @@ const apLuatGia = (rows: ResolvedItem[], maps: ResolveMaps, tourDate: string | n
  *  Hà Nội: khoá không mang thành phố — học vào là "Home越式…" ở Hội An cũng ăn giá
  *  MAMMOM. Du thuyền ngủ đêm: khoá "船上自助餐" không biết đêm đó có ngủ tàu hay
  *  không — học số 0 vào là bữa trên tàu ngày của đoàn sau cũng thành 0. Combo
- *  Fansipan / dòng luật tách ra: giá do danh mục + luật quyết, tự ra lại mỗi lần. */
+ *  Fansipan / dòng luật tách ra: giá do danh mục + luật quyết, tự ra lại mỗi lần.
+ *  Nhà hàng chỉ định: giá menu tự ra lại mỗi lần; còn dòng đang TẠM theo mức USD
+ *  mà học vào thì sổ tay lại mang công thức USD đi đè menu — đúng lỗi luật vừa chặn. */
 const giaDoLuatTuRa = (r: ResolvedItem) =>
-  (!!r.mon_viet_ha_noi || !!r.tau_ngu_dem || !!r.combo_fansipan || !!r.tach_tu) && !r.sua_tay;
+  (!!r.mon_viet_ha_noi || !!r.tau_ngu_dem || !!r.combo_fansipan || !!r.tach_tu || !!r.nh_chi_dinh)
+  && !r.sua_tay;
 
 interface Props {
   open: boolean;
@@ -437,9 +446,11 @@ export function BaoGiaAiImport({
     const nguonLaTau = !!t?.ten && !t.thieu_gia && !t.giu_gia_cu && !r.sua_tay;
     // Luật món Việt Hà Nội đã đặt MAMMOM → chú thích luật là nguồn giá, như tàu.
     const nguonLaMonVietHn = !!r.mon_viet_ha_noi && !r.mon_viet_ha_noi.thieu_gia && !r.sua_tay;
-    // Giá combo Fansipan / dòng luật tách ra lấy từ danh mục → chú thích đã nói nguồn.
+    // Giá combo Fansipan / dòng luật tách ra / menu nhà hàng chỉ định lấy từ danh mục
+    // → chú thích đã nói nguồn.
     const nguonLaLuatKhac = !r.sua_tay && r.don_gia > 0
-      && ((r.combo_fansipan?.vai_tro === "cap_treo" && !!r.combo_fansipan.ten) || !!r.tach_tu);
+      && ((r.combo_fansipan?.vai_tro === "cap_treo" && !!r.combo_fansipan.ten) || !!r.tach_tu
+        || (!!r.nh_chi_dinh && !r.nh_chi_dinh.thieu_menu));
     // Dòng luật để 0 CỐ Ý — nhãn cam "cần điền giá" ở đây chỉ dụ người nhập gõ thêm tiền.
     return nguonLaTau || nguonLaMonVietHn || nguonLaLuatKhac || dongDe0TheoLuat(r) ? null : nhanNguonChinh(r);
   };

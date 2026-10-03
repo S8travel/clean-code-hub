@@ -210,6 +210,19 @@ export interface ResolvedItem {
   da_tach?: KhoaTach[];
   /** Dòng do luật tách ra khỏi một dòng lịch trình để tính tiền riêng. */
   tach_tu?: { khoa: KhoaTach; dong_goc: string };
+
+  /** Nhà hàng chỉ định (lib/bao-gia-nha-hang-chi-dinh.ts): giá theo menu trong danh mục,
+   *  đứng trên công thức USD và trên số sổ tay. */
+  nh_chi_dinh?: {
+    nha_hang: string;
+    /** Giá set menu luật đã áp — nhận ra giá bị sửa tay khác menu. */
+    gia_menu?: number;
+    /** Giá trước khi luật thay + nguồn của nó (công thức USD / sổ tay / máy khớp). */
+    gia_cu?: number;
+    nguon_cu?: string;
+    /** Danh mục chưa có set nào có giá → đang tạm theo mức USD đối tác ghi. */
+    thieu_menu?: boolean;
+  };
 }
 
 /** Dòng ăn mà luật trọn gói (du thuyền ngủ đêm, combo Fansipan) đã quyết giá —
@@ -429,6 +442,41 @@ function cuoiTuanTrongTenSet(ten: string): boolean | null {
   return null;
 }
 
+/** Ngày đó có phải cuối tuần (T7/CN) không; null = chưa biết ngày. */
+function cuoiTuanCuaNgay(ngayDate: string | null | undefined): boolean | null {
+  const d = ngayDate ? new Date(`${ngayDate}T00:00:00`) : null;
+  const thu = d && !Number.isNaN(d.getTime()) ? d.getDay() : null; // 0=CN, 6=T7
+  return thu == null ? null : thu === 0 || thu === 6;
+}
+
+/** Set dành cho TRẺ EM ("BUFFET TE …", "trẻ em", "kid") — dòng ăn báo giá là suất
+ *  người lớn, luật không bao giờ được tự chọn set này (giá thấp hơn hẳn). */
+function laSetTreEm(ten: string): boolean {
+  const t = nanTenSet(ten);
+  return [" TE ", " TRE EM ", " EM BE ", " CHILD ", " CHILDREN ", " KID ", " KIDS "].some((k) => t.includes(k));
+}
+
+/**
+ * Set CÓ GIÁ dùng được cho bữa này: loại thẳng set nói rõ hoàn cảnh KHÁC — set
+ * ghi "TỐI" không dùng cho bữa trưa, set "T7 - CN" không dùng cho ngày thường,
+ * set trẻ em không dùng cho suất người lớn.
+ * Chưa biết ngày đi thì không loại theo thứ (còn cả set thường lẫn cuối tuần).
+ */
+export function setHopNguCanh<T extends { id: number; ten: string; gia: number | null }>(
+  sets: readonly T[],
+  ctx: { bua?: "trua" | "toi" | null; ngayDate?: string | null },
+): T[] {
+  const laCuoiTuan = cuoiTuanCuaNgay(ctx.ngayDate);
+  return sets.filter((s) => {
+    if ((s.gia ?? 0) <= 0 || laSetTreEm(s.ten)) return false;
+    const bua = buaTrongTenSet(s.ten);
+    const ct = cuoiTuanTrongTenSet(s.ten);
+    if (bua && ctx.bua && bua !== ctx.bua) return false;
+    if (ct != null && laCuoiTuan != null && ct !== laCuoiTuan) return false;
+    return true;
+  });
+}
+
 /**
  * Chọn set menu cho một bữa khi AI khớp được nhà hàng nhưng bỏ trống ô set.
  *
@@ -444,22 +492,8 @@ export function chonSetMenuTheoBua(
   sets: readonly { id: number; ten: string; gia: number | null }[],
   ctx: { bua?: "trua" | "toi" | null; ngayDate?: string | null },
 ): number | null {
-  const dung = sets.filter((s) => (s.gia ?? 0) > 0);
-  if (dung.length === 0) return null;
-
-  const d = ctx.ngayDate ? new Date(`${ctx.ngayDate}T00:00:00`) : null;
-  const thu = d && !Number.isNaN(d.getTime()) ? d.getDay() : null; // 0=CN, 6=T7
-  const laCuoiTuan = thu == null ? null : thu === 0 || thu === 6;
-
-  // Loại thẳng set nói rõ hoàn cảnh KHÁC: set ghi "TỐI" không dùng cho bữa trưa,
-  // set "T7 - CN" không dùng cho ngày thường.
-  const hopLe = dung.filter((s) => {
-    const bua = buaTrongTenSet(s.ten);
-    const ct = cuoiTuanTrongTenSet(s.ten);
-    if (bua && ctx.bua && bua !== ctx.bua) return false;
-    if (ct != null && laCuoiTuan != null && ct !== laCuoiTuan) return false;
-    return true;
-  });
+  const laCuoiTuan = cuoiTuanCuaNgay(ctx.ngayDate);
+  const hopLe = setHopNguCanh(sets, ctx);
   if (hopLe.length === 0) return null;
   if (hopLe.length === 1) return hopLe[0].id; // còn đúng một khả năng
 
@@ -498,7 +532,7 @@ export function lyDoChonSet(
 
 /** Set menu theo từng nhà hàng, dựng 1 lần cho mỗi bộ maps (memo hoá). */
 const setTheoNhaHangCache = new WeakMap<ResolveMaps, Map<number, { id: number; ten: string; gia: number | null }[]>>();
-function setMenuCuaNhaHang(maps: ResolveMaps, nhaHangId: number) {
+export function setMenuCuaNhaHang(maps: ResolveMaps, nhaHangId: number) {
   let idx = setTheoNhaHangCache.get(maps);
   if (!idx) {
     idx = new Map();
