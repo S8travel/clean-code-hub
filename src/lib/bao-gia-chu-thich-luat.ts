@@ -64,6 +64,18 @@ function luatTau(r: ResolvedItem, them: Them) {
   }
 }
 
+function luatTauNguDem(r: ResolvedItem, them: Them) {
+  const t = r.loai === "meal" ? r.tau_ngu_dem : undefined;
+  if (!t) return;
+  if (t.goi_them) {
+    them("thong_tin", `Luật du thuyền ngủ đêm: bữa trên tàu đã gồm trong giá du thuyền ${t.ten} (đêm ngày ${t.dem}); dòng này chỉ tính món gọi thêm: ${t.goi_them}.`);
+    if (r.don_gia <= 0) them("canh_bao", `Chưa có giá món gọi thêm (${t.goi_them}) — nhập giá.`);
+    return;
+  }
+  them("thong_tin", `Luật du thuyền ngủ đêm: đoàn ngủ trên ${t.ten} (đêm ngày ${t.dem}) — bữa trên tàu (trưa + tối hôm lên tàu, brunch hôm sau) đã gồm trong giá du thuyền ở dòng khách sạn, chỉ nước uống và món gọi thêm tính riêng → để 0.`);
+  if (r.don_gia > 0) them("canh_bao", `Dòng này đang có giá ${so(r.don_gia)} ₫ — giữ thì bữa ăn bị tính 2 lần (đã nằm trong giá du thuyền).`);
+}
+
 function luatVeGopVaoBua(r: ResolvedItem, them: Them) {
   if (!r.ve_vinh_da_gom) return;
   them("thong_tin", `Luật tàu Hạ Long: vé tàu / vé vịnh đã tính trong giá bữa ăn trên tàu${r.ve_vinh_gop_tau ? ` ${r.ve_vinh_gop_tau}` : ""} cùng ngày — để 0 cho khỏi tính 2 lần.`);
@@ -80,6 +92,47 @@ function luatCumBaDinh(r: ResolvedItem, them: Them) {
     ? "Luật cụm Ba Đình: chỉ nhìn từ ngoài — quảng trường, lăng, chùa Một Cột không mất vé nên để 0."
     : "Luật cụm Ba Đình: một vé vào được cả Phủ Chủ tịch lẫn nhà sàn; vé đã tính ở dòng khác cùng ngày nên để 0.");
   if (r.don_gia > 0) them("canh_bao", `Dòng này đang có giá ${so(r.don_gia)} ₫ dù luật để 0 — kiểm lại.`);
+}
+
+function luatComboFansipan(r: ResolvedItem, them: Them) {
+  const c = r.combo_fansipan;
+  if (!c) return;
+  if (c.vai_tro === "cap_treo") {
+    if (r.loai !== "ticket") return;
+    if (!c.ten || c.gia == null) {
+      them("canh_bao", "Luật combo Fansipan: có đi cáp treo Fansipan nhưng danh mục chưa có combo cáp treo + buffet trưa + tàu Mường Hoa có giá — chọn / nhập giá tay.");
+      return;
+    }
+    them("thong_tin", `Luật combo Fansipan: có đi cáp treo Fansipan → tính combo "${c.ten}" ${so(c.gia)} ₫, đã gồm cáp treo + buffet trưa + tàu Mường Hoa; buffet và tàu Mường Hoa cùng ngày để 0.`);
+    if (c.gia_cu != null) them("thong_tin", `Đã thay giá cũ ${so(c.gia_cu)} ₫ (${c.nguon_cu}).`);
+    if (r.don_gia !== c.gia) them("canh_bao", `Giá đang ${so(r.don_gia)} ₫, khác giá combo ${so(c.gia)} ₫ — đã sửa tay.`);
+    return;
+  }
+  // Người nhập đã đổi dòng sang loại khác → câu này không còn nói về dòng đó.
+  if (r.loai !== (c.vai_tro === "buffet" ? "meal" : "ticket")) return;
+  const ten = c.vai_tro === "buffet" ? "buffet trưa trên Fansipan" : "tàu Mường Hoa";
+  them("thong_tin", `Luật combo Fansipan: ${ten} đã gồm trong combo${c.ten ? ` "${c.ten}"` : ""} cùng ngày → để 0.`);
+  if (r.don_gia > 0) them("canh_bao", `Dòng này đang có giá ${so(r.don_gia)} ₫ — giữ thì bị tính 2 lần (đã nằm trong combo).`);
+}
+
+/** Dịch vụ tính riêng mà luật đã tách ra khỏi một dòng lịch trình. */
+function luatTachDong(r: ResolvedItem, them: Them) {
+  const t = r.tach_tu;
+  if (t) {
+    them("thong_tin", t.khoa === "tau_dinh_fansipan"
+      ? `Luật combo Fansipan: tàu leo đỉnh không nằm trong combo cáp treo + buffet + tàu Mường Hoa — tách từ dòng "${t.dong_goc}" để tính riêng.`
+      : `Luật cụm Ba Đình: Bảo tàng Hồ Chí Minh không nằm trong vé Phủ Chủ tịch + nhà sàn — tách từ dòng "${t.dong_goc}" để tính riêng.`);
+    if (r.don_gia <= 0) {
+      them("canh_bao", t.khoa === "bao_tang_hcm"
+        ? "Danh mục cảnh điểm chưa có Bảo tàng Hồ Chí Minh có giá — nhập giá ở đây, và thêm vào danh mục để lần sau tự điền."
+        : "Danh mục chưa có giá vé tàu leo đỉnh cho chiều này — nhập giá.");
+    }
+  }
+  for (const k of r.da_tach ?? []) {
+    them("thong_tin", k === "tau_dinh_fansipan"
+      ? "Tàu leo đỉnh trong dòng này không nằm trong combo — đã tách ra tính riêng ở dòng khác cùng ngày."
+      : "Bảo tàng Hồ Chí Minh trong dòng này không nằm trong vé cụm — đã tách ra tính riêng ở dòng khác cùng ngày.");
+  }
 }
 
 function luatMonVietHaNoi(r: ResolvedItem, them: Them) {
@@ -150,14 +203,31 @@ export function chuThichLuat(
   const ra: ChuThichLuat[] = [];
   const them: Them = (muc, noi_dung) => { ra.push({ muc, noi_dung }); };
   luatTau(r, them);
+  luatTauNguDem(r, them);
   luatVeGopVaoBua(r, them);
   luatCumBaDinh(r, them);
+  luatComboFansipan(r, them);
+  luatTachDong(r, them);
   luatMonVietHaNoi(r, them);
   if (daTruCombo) luatCombo(r, them);
   luatChonSet(r, them);
   luatDinhMucUsd(r, them);
   luatGiaMinhThang(r, them);
   return ra;
+}
+
+/** Dòng LUẬT cố ý để 0: không vào cụm Ba Đình, vé đã tính ở dòng cùng ngày, vé tàu
+ *  đã gộp vào bữa ăn, bữa trên du thuyền ngủ đêm, buffet / tàu Mường Hoa trong combo
+ *  Fansipan. Màn review không được tô cam / đếm "cần điền giá" cho những dòng này —
+ *  nhãn đó chỉ dụ người nhập gõ thêm tiền, tức tính 2 lần đúng thứ luật vừa chặn. */
+export function dongDe0TheoLuat(r: ResolvedItem): boolean {
+  const combo = r.combo_fansipan;
+  return r.don_gia <= 0 && (
+    r.cum_ba_dinh === "ngoai_quan" || r.cum_ba_dinh === "da_gom" || !!r.ve_vinh_da_gom
+    || (r.loai === "meal" && !!r.tau_ngu_dem && !r.tau_ngu_dem.goi_them)
+    || (combo?.vai_tro === "buffet" && r.loai === "meal")
+    || (combo?.vai_tro === "tau_muong_hoa" && r.loai === "ticket")
+  );
 }
 
 /** Như `toBaoGiaItems` nhưng chụp kèm chú thích luật + đơn giá lúc chụp, để bảng
