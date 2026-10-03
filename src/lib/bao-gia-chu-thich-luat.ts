@@ -135,6 +135,21 @@ function luatTachDong(r: ResolvedItem, them: Them) {
   }
 }
 
+function luatNhaHangChiDinh(r: ResolvedItem, them: Them) {
+  const c = r.loai === "meal" ? r.nh_chi_dinh : undefined;
+  if (!c) return;
+  if (c.thieu_menu) {
+    them("canh_bao", `Nhà hàng chỉ định ${c.nha_hang}: danh mục chưa có set menu có giá cho bữa này → đang tạm theo mức USD đối tác ghi. Thêm set menu cho nhà hàng này để lần sau lấy giá nhà hàng.`);
+    return;
+  }
+  them("thong_tin", `Luật nhà hàng chỉ định: lịch trình nêu đích danh ${c.nha_hang} → giá theo menu trong danh mục, đứng trên công thức USD và số sổ tay.`);
+  // Giá cũ là mức đối tác ghi thì câu "Luật giá" bên dưới đã nêu số đó rồi.
+  if (c.gia_cu != null && c.gia_cu !== r.gia_dong_ghi) them("thong_tin", `Đã thay giá cũ ${so(c.gia_cu)} ₫ (${c.nguon_cu}).`);
+  if (c.gia_menu != null && r.don_gia !== c.gia_menu) {
+    them("canh_bao", `Giá đang ${so(r.don_gia)} ₫, khác giá menu ${so(c.gia_menu)} ₫ — đã sửa tay.`);
+  }
+}
+
 function luatMonVietHaNoi(r: ResolvedItem, them: Them) {
   const m = r.loai === "meal" ? r.mon_viet_ha_noi : undefined;
   if (!m) return;
@@ -209,6 +224,7 @@ export function chuThichLuat(
   luatComboFansipan(r, them);
   luatTachDong(r, them);
   luatMonVietHaNoi(r, them);
+  luatNhaHangChiDinh(r, them);
   if (daTruCombo) luatCombo(r, them);
   luatChonSet(r, them);
   luatDinhMucUsd(r, them);
