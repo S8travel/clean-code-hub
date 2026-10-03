@@ -1022,6 +1022,16 @@ export function useCreateAdjustment() {
       lyDo: string;
       surplusMode?: "cong_no" | "hoan_tien";
     }) => {
+      // Phiếu định kỳ là khoản GỘP cả cụm NCC × kỳ (cọc / từng đợt): đặt
+      // thanh_tien_thuc_te từng dòng = phần chia của số tiền phiếu sẽ ép chi phí thật
+      // xuống bằng phần cọc → phần còn lại không bao giờ được đề nghị. Chi phí giảm thì
+      // sửa từng dòng ở tab Chi phí: trigger trg_dinh_ky_don_phan_du tự dồn phần dư.
+      if (dnttGoc.loai === "dinh_ky") {
+        throw new Error(
+          "ĐNTT định kỳ không điều chỉnh theo tổng phiếu — sửa chi phí từng dòng ở tab Chi phí của đoàn; " +
+          "phần đã đề nghị dư tự chuyển sang chi phí còn thiếu cùng NCC/kỳ.",
+        );
+      }
       // Pre-fetch allocations để biết các chi_phi liên quan.
       // currentTotal phải là COMMITMENT thật (so_tien_da_dntt — sum allocs trên các DNTT
       // không bị huỷ), KHÔNG dùng chi_phi.thanh_tien (phản ánh state edit của user).

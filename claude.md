@@ -657,6 +657,18 @@ Cập nhật thanh_tien_thuc_te trên doan_chi_phi:
 - Chi phí đánh dấu thanh_toan_dinh_ky=true được gộp thanh toán theo NCC
 - useCreateBatchDNTT: tạo 1 ĐNTT với doan_id=null, loai='dinh_ky'
   kèm nhiều allocations cho các chi phí của nhiều đoàn
+- "Còn" của cụm NCC × kỳ tính THEO TỪNG DÒNG: Σ max(0, net − so_tien_da_dntt)
+  (lib/dinh-ky-amounts tongCumDinhKy) → phần phiếu gán cho dòng VƯỢT chi phí của nó
+  không được trừ vào dòng khác.
+- Vì vậy chi phí định kỳ bị sửa GIẢM xuống dưới phần đã đề nghị → trigger
+  trg_dinh_ky_don_phan_du (migration 20261003) tự chuyển phần vượt DO LẦN GIẢM ĐÓ sang
+  dòng còn thiếu CÙNG NCC: cùng phiếu trước, rồi cùng kỳ (thêm allocation). Tổng phiếu
+  giữ nguyên, ghi vào ghi_chu phiếu + activity_log. Không dồn: phiếu đã có
+  cong_no.dntt_goc_id, phần vượt có từ trước, hết chỗ → trang hiện "⚠ Đề nghị vượt".
+  Lỗi khi dồn không làm hỏng lần lưu chi phí (ghi activity_log action='loi').
+- Dòng nhận ngoài phiếu (đoàn thêm sau) từ đó có ĐNTT định kỳ → chặn xoá/hủy đoàn/đẩy
+  kỳ như mọi dòng đã đề nghị. "Điều chỉnh sau thanh toán" CHẶN với phiếu định kỳ
+  (useCreateAdjustment chia thanh_tien_thuc_te theo số tiền phiếu — sai với phiếu cọc).
 ```
 
 ### Xóa ĐNTT

@@ -41,17 +41,12 @@ jobs:
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/recalc_chi_phi_payment_status/schema.sql
 
       - name: Load function (bản định nghĩa recalc_chi_phi_payment_status)
-        # File 20260521 là migration CUỐI CÙNG viết trọn thân hàm
-        # recalc_chi_phi_payment_status (không phải "migration mới nhất" của repo —
-        # mới nhất hiện là 20260905d). Trailing SELECT backfill an toàn trên DB
-        # rỗng (array rỗng, no-op).
-        #
-        # ⚠️ GIỚI HẠN đã biết: 20260728_tai_khoan_chi_xem vá thêm guard
-        # `is_tk_chi_xem()` vào thân hàm ngay trên DB (regexp trên
-        # pg_get_functiondef), nên bản chạy ở CI KHÔNG có guard đó — CI kiểm phần
-        # tính tiền, không kiểm chặn tài khoản chỉ xem.
-        # Sửa lại thân hàm ở migration nào thì phải trỏ dòng dưới sang file đó.
-        run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/migrations/20260521_dntt_tu_choi_no_commitment.sql
+        # File 20261003b là migration CUỐI CÙNG viết trọn thân hàm
+        # recalc_chi_phi_payment_status: bản prod (có guard is_tk_chi_xem — schema
+        # test stub guard = false) + khóa dòng trước khi tính.
+        # Sửa lại thân hàm ở migration nào thì phải trỏ dòng dưới (và bước load
+        # recalc của bộ dinh_ky_don_phan_du bên dưới) sang file đó.
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/migrations/20261003b_recalc_khoa_dong_truoc.sql
 
       - name: Run tests
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/recalc_chi_phi_payment_status/test.sql
@@ -67,6 +62,27 @@ jobs:
 
       - name: Run tests (create_lead_from_form)
         run: psql "$PGURL" -v ON_ERROR_STOP=1 -f supabase/tests/create_lead_from_form/test.sql
+
+      # ── dinh_ky_don_phan_du ──────────────────────────────────────────────
+      # Trigger tự dồn phần ĐNTT định kỳ vượt chi phí (tiền thật của NCC). Database
+      # RIÊNG: bảng trùng tên với bộ recalc nhưng nhiều cột hơn. seed_lech nạp TRƯỚC
+      # migration để test cả bước dọn dữ liệu (bước 4) của migration.
+      - name: Create database (dinh_ky_don_phan_du)
+        run: psql "$PGURL" -v ON_ERROR_STOP=1 -c "CREATE DATABASE dinh_ky_test"
+
+      - name: Load schema + recalc + seed + migration (dinh_ky_don_phan_du)
+        env:
+          PGURL_DK: postgres://postgres:test@localhost:5432/dinh_ky_test
+        run: |
+          psql "$PGURL_DK" -v ON_ERROR_STOP=1 -f supabase/tests/dinh_ky_don_phan_du/schema.sql
+          psql "$PGURL_DK" -v ON_ERROR_STOP=1 -f supabase/migrations/20261003b_recalc_khoa_dong_truoc.sql
+          psql "$PGURL_DK" -v ON_ERROR_STOP=1 -f supabase/tests/dinh_ky_don_phan_du/seed_lech.sql
+          psql "$PGURL_DK" -v ON_ERROR_STOP=1 -f supabase/migrations/20261003_dinh_ky_don_phan_du.sql
+
+      - name: Run tests (dinh_ky_don_phan_du)
+        env:
+          PGURL_DK: postgres://postgres:test@localhost:5432/dinh_ky_test
+        run: psql "$PGURL_DK" -v ON_ERROR_STOP=1 -f supabase/tests/dinh_ky_don_phan_du/test.sql
 
   check:
     runs-on: ubuntu-latest

@@ -802,10 +802,13 @@ function DNTTPageContent() {
                       )}
                       {row.payment_status === "paid" && row.trang_thai_duyet !== "da_huy" && (
                         <>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" title={t("Điều chỉnh sau thanh toán")}
-                            onClick={() => handleAdjustOpen(row)}>
-                            <SlidersHorizontal className="h-4 w-4" />
-                          </Button>
+                          {/* Phiếu định kỳ không điều chỉnh theo tổng — xem guard trong useCreateAdjustment. */}
+                          {row.loai !== "dinh_ky" && (
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-blue-500" title={t("Điều chỉnh sau thanh toán")}
+                              onClick={() => handleAdjustOpen(row)}>
+                              <SlidersHorizontal className="h-4 w-4" />
+                            </Button>
+                          )}
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-orange-500" title={t("Hủy thanh toán")}
                             onClick={() => { setCancelMode("hoan_tien"); setCancelTarget({ id: row.id, isPaid: true, moTa: row.mo_ta || "ĐNTT" }); }}>
                             <Ban className="h-4 w-4" />
