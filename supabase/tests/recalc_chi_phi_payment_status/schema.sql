@@ -31,3 +31,9 @@ CREATE TABLE payments (
   dntt_id bigint NOT NULL REFERENCES de_nghi_thanh_toan(id) ON DELETE CASCADE,
   so_tien numeric NOT NULL
 );
+
+-- Thân hàm hiện tại (migration 20261003b) có guard tài khoản chỉ xem. Bộ này chỉ
+-- kiểm phần tính tiền → stub "không phải tài khoản chỉ xem". Guard thật được test ở
+-- bộ dinh_ky_don_phan_du (có auth.uid() giả + user_roles).
+CREATE OR REPLACE FUNCTION public.is_tk_chi_xem() RETURNS boolean
+LANGUAGE sql STABLE AS $$ SELECT false $$;

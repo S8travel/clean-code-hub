@@ -6,10 +6,11 @@ auth/RLS → dùng Postgres container thuần là đủ.
 
 ## Cấu trúc
 
-- `schema.sql` — minimal table (4 bảng) chỉ chứa cột mà hàm đọc/ghi.
+- `schema.sql` — minimal table (4 bảng) chỉ chứa cột mà hàm đọc/ghi + stub `is_tk_chi_xem()` = false.
 - `test.sql` — 12 test cases, mỗi case wrap trong `DO $$ ... ASSERT ... $$`. Fail → exit code ≠ 0.
-- Function source: lấy thẳng từ migration `supabase/migrations/20260521_dntt_tu_choi_no_commitment.sql`
-  (định nghĩa mới nhất của hàm). KHÔNG duplicate trong test/ — keep single source of truth.
+- Function source: lấy thẳng từ migration `supabase/migrations/20261003b_recalc_khoa_dong_truoc.sql`
+  (định nghĩa mới nhất của hàm: bản prod có guard chỉ xem + khóa dòng trước khi tính).
+  KHÔNG duplicate trong test/ — keep single source of truth.
 
 ## Chạy local
 
@@ -19,13 +20,10 @@ docker run --rm -d -p 54329:5432 -e POSTGRES_PASSWORD=test --name pg-recalc-test
 sleep 2
 psql "postgres://postgres:test@localhost:54329/postgres" -v ON_ERROR_STOP=1 \
   -f supabase/tests/recalc_chi_phi_payment_status/schema.sql \
-  -f supabase/migrations/20260521_dntt_tu_choi_no_commitment.sql \
+  -f supabase/migrations/20261003b_recalc_khoa_dong_truoc.sql \
   -f supabase/tests/recalc_chi_phi_payment_status/test.sql
 docker stop pg-recalc-test
 ```
-
-> ⚠️ Migration 20260521 cuối file có `SELECT recalc_chi_phi_payment_status(...)` chạy
-> backfill — vô hại trên DB rỗng (array rỗng, không update gì).
 
 ## Chạy trên CI
 

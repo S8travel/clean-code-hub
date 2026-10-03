@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { format, startOfMonth, endOfMonth } from "date-fns";
 import { proRataInts } from "@/lib/pro-rata";
-import { netPhaiTra } from "@/lib/dinh-ky-amounts";
+import { conPhaiDeNghi, deNghiVuot, netPhaiTra, tongCumDinhKy } from "@/lib/dinh-ky-amounts";
 import { nhanChiPhi } from "@/lib/dinh-ky-nhom";
 import { kyHieuLuc, kyMacDinh, daDoiKy, kyKeTiep, coTheDoiKy } from "@/lib/ky-thanh-toan";
 import { Button } from "@/components/ui/button";
@@ -122,6 +122,8 @@ interface MonthGroup {
   totalThanhTien: number;
   totalDaTT: number;
   totalConLai: number;
+  /** Phần đã đề nghị vượt chi phí mà DB không tự dồn được — xem deNghiVuot. */
+  totalDeNghiVuot: number;
   doanCount: number;
 }
 
@@ -141,6 +143,7 @@ interface DialogContext {
   monthKey: string;
   monthLabel: string;
   rows: DinhKyChiPhiRow[]; // chi phí của tháng có conLai > 0
+  deNghiVuot: number; // của cả tháng — để cảnh báo trong hộp tạo ĐNTT
 }
 
 export default function ThanhToanDinhKyPage() {
@@ -228,6 +231,7 @@ export default function ThanhToanDinhKyPage() {
         totalThanhTien: 0,
         totalDaTT: 0,
         totalConLai: 0,
+        totalDeNghiVuot: 0,
         doanCount: 0,
       };
       b.months.set(monthKey, fresh);
@@ -239,15 +243,7 @@ export default function ThanhToanDinhKyPage() {
       // Kỳ hiệu lực = override ky_thanh_toan (nếu kế toán đã đẩy) ?? tháng ngày đi.
       const monthKey = kyHieuLuc(r);
       const bucket = ensureNcc(nccKey, r.nha_cung_cap_id, r.ten_ncc ?? t("Chưa có NCC"), r.ncc_so_tai_khoan, r.ncc_ngan_hang, r.ncc_tai_khoan_thanh_toan);
-      const mg = ensureMonth(bucket, monthKey);
-      mg.rows.push(r);
-      const tt = netPhaiTra(r);
-      mg.totalThanhTien += tt;
-      mg.totalDaTT += r.so_tien_da_tt;
-      // "Còn" = còn CẦN ĐỀ NGHỊ = NET − đã đề nghị (so_tien_da_dntt, gồm ĐNTT chưa
-      // trả). KHÔNG dùng so_tien_da_tt (đã trả) — kẻo phần đã đề nghị chưa trả bị
-      // batch lại → đề nghị trùng/trả dư cho NCC.
-      mg.totalConLai += Math.max(0, tt - r.so_tien_da_dntt);
+      ensureMonth(bucket, monthKey).rows.push(r);
     });
 
     dnttList.forEach((d) => {
@@ -277,10 +273,18 @@ export default function ThanhToanDinhKyPage() {
 
     const result: NccGroup[] = [];
     map.forEach((bucket, nccKey) => {
-      const monthsArr = [...bucket.months.values()].map((mg) => ({
-        ...mg,
-        doanCount: new Set(mg.rows.map((r) => r.doan_id)).size,
-      }));
+      const monthsArr = [...bucket.months.values()].map((mg) => {
+        // "Còn" = còn cần ĐỀ NGHỊ (theo so_tien_da_dntt) — công thức ở lib/dinh-ky-amounts.
+        const tong = tongCumDinhKy(mg.rows);
+        return {
+          ...mg,
+          totalThanhTien: tong.tongPhaiTra,
+          totalDaTT: tong.daTra,
+          totalConLai: tong.conPhaiDeNghi,
+          totalDeNghiVuot: tong.deNghiVuot,
+          doanCount: new Set(mg.rows.map((r) => r.doan_id)).size,
+        };
+      });
       monthsArr.sort((a, b) => a.monthKey.localeCompare(b.monthKey));
       result.push({
         nccKey,
@@ -299,10 +303,7 @@ export default function ThanhToanDinhKyPage() {
   // Số tiền partial (nếu mode='partial'), parse số nguyên — dùng dialogCtx
   const dialogTotalConLai = useMemo(() => {
     if (!dialogCtx) return 0;
-    return dialogCtx.rows.reduce((s, r) => {
-      const tt = netPhaiTra(r);
-      return s + Math.max(0, tt - r.so_tien_da_dntt);
-    }, 0);
+    return dialogCtx.rows.reduce((s, r) => s + conPhaiDeNghi(r), 0);
   }, [dialogCtx]);
 
   const batchPartialNum = Number((batchPaidAmount || "").replace(/\D/g, "")) || 0;
@@ -322,10 +323,7 @@ export default function ThanhToanDinhKyPage() {
 
   const openCreateDialogForMonth = (ncc: NccGroup, mg: MonthGroup) => {
     if (!ncc.nccId) { toast.error(t("Tháng này không có NCC hợp lệ")); return; }
-    const eligible = mg.rows.filter((r) => {
-      const tt = netPhaiTra(r);
-      return Math.max(0, tt - r.so_tien_da_dntt) > 0;
-    });
+    const eligible = mg.rows.filter((r) => conPhaiDeNghi(r) > 0);
     if (eligible.length === 0) { toast.warning(t("Tháng này không còn chi phí cần thanh toán")); return; }
     setDialogCtx({
       nccId: ncc.nccId,
@@ -333,6 +331,7 @@ export default function ThanhToanDinhKyPage() {
       monthKey: mg.monthKey,
       monthLabel: mg.monthLabel,
       rows: eligible,
+      deNghiVuot: mg.totalDeNghiVuot,
     });
     setBatchMode("full");
     setBatchPaidAmount("");
@@ -360,7 +359,7 @@ export default function ThanhToanDinhKyPage() {
     // không cần manual drift fix nữa.
     const conLaiByRow = dialogCtx.rows.map((r) => ({
       id: r.id,
-      conLai: Math.max(0, netPhaiTra(r) - r.so_tien_da_dntt),
+      conLai: conPhaiDeNghi(r),
     }));
     const allocAmts = proRataInts(batchEffectiveAmount, conLaiByRow.map((x) => x.conLai));
     const allocations = conLaiByRow.map((x, i) => ({
@@ -548,6 +547,11 @@ export default function ThanhToanDinhKyPage() {
                   <span className="text-muted-foreground">{t("Tổng còn lại của tháng")}</span>
                   <span className="font-semibold text-orange-600">{fmt(dialogTotalConLai)} ₫</span>
                 </div>
+                {dialogCtx.deNghiVuot > 0 && (
+                  <p className="text-xs text-amber-800 pt-1">
+                    ⚠ {fmt(dialogCtx.deNghiVuot)} ₫ {t("đã đề nghị đang vượt chi phí hiện tại của một số dòng và hệ thống không tự dồn. Số còn lại ở trên chưa tính phần này — kiểm tra công nợ NCC của các đoàn đó trước khi tạo, tránh trả dư hoặc trừ hai lần.")}
+                  </p>
+                )}
                 <div className="flex justify-between gap-3">
                   <span className="text-muted-foreground shrink-0">{t("Chuyển đến")}</span>
                   {dialogAcct ? (
@@ -640,9 +644,7 @@ export default function ThanhToanDinhKyPage() {
               <div className="max-h-40 overflow-y-auto text-xs space-y-1">
                 {(() => {
                   // Tính alloc preview KHỚP với save logic (proRataInts) — không drift
-                  const conLais = dialogCtx.rows.map((r) =>
-                    Math.max(0, netPhaiTra(r) - r.so_tien_da_dntt)
-                  );
+                  const conLais = dialogCtx.rows.map((r) => conPhaiDeNghi(r));
                   const allocated = batchMode === "partial" && batchPartialValid && batchEffectiveAmount > 0
                     ? proRataInts(batchEffectiveAmount, conLais)
                     : conLais;
@@ -840,6 +842,14 @@ function MonthGroupCard({
             <span className={fullyProposed ? "text-emerald-600 font-medium" : "text-orange-600 font-medium"}>
               {t("Còn")} {fmt(monthGroup.totalConLai)}
             </span>
+            {monthGroup.totalDeNghiVuot > 0 && (
+              <span
+                className="text-amber-700 font-medium"
+                title={t("Có dòng đang được đề nghị nhiều hơn chi phí hiện tại mà hệ thống không tự dồn được (dư từ trước, đã có công nợ đối ứng, hoặc không còn dòng thiếu cùng NCC). Số 'Còn' chưa tính phần này.")}
+              >
+                {" "}· ⚠ {t("Đề nghị vượt")} {fmt(monthGroup.totalDeNghiVuot)}
+              </span>
+            )}
             {monthGroup.rows.length > 0 && (
               <> · {monthGroup.rows.length} {t("chi phí")} · {monthGroup.doanCount} {t("đoàn")}</>
             )}
@@ -940,6 +950,14 @@ function MonthGroupCard({
                               <span className="text-amber-600 text-[10px]">{t("Còn")} {fmt(conLai)}</span>
                             ) : (
                               <span className="text-orange-600 text-[10px]">{t("Chưa TT")}</span>
+                            )}
+                            {deNghiVuot(r) > 0 && (
+                              <span
+                                className="ml-1 text-amber-700 text-[10px]"
+                                title={t("Đã đề nghị nhiều hơn chi phí hiện tại của dòng này")}
+                              >
+                                ⚠ {t("đã đề nghị")} {fmt(r.so_tien_da_dntt)}
+                              </span>
                             )}
                           </span>
                         </div>
